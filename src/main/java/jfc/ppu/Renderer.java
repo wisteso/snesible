@@ -5,9 +5,19 @@ import java.util.Arrays;
 /**
  * Turns the PPU's state into pixels, one scanline at a time.
  *
- * <p>For each line, every enabled layer (up to four backgrounds plus sprites) is drawn into its
- * own {@link LayerLine}. Then, for each pixel, the layers are checked in front-to-back order
- * and the first opaque one wins. If none is opaque, the backdrop (color 0) shows through.
+ * <h2>The pipeline for one line</h2>
+ * <ol>
+ *   <li><b>Layers:</b> every background and the sprites are drawn into their own
+ *       {@link LayerLine}, with mosaic applied to backgrounds that use it.</li>
+ *   <li><b>Windows:</b> the per-pixel window masks are worked out ({@link WindowMasks}).</li>
+ *   <li><b>Two screens:</b> the layers are combined twice, using each mode's priority order.
+ *       The <i>main screen</i> uses the layers enabled in TM ($212C), the <i>sub screen</i>
+ *       those in TS ($212D). Each screen's windowed layers (TMW/TSW) are hidden where masked.</li>
+ *   <li><b>Color math:</b> each main screen pixel may be added to or subtracted from the sub
+ *       screen pixel (or a fixed color), optionally halved. This gives transparency, shadows,
+ *       fades and colored gradients.</li>
+ *   <li><b>Brightness:</b> the master brightness scales the final color.</li>
+ * </ol>
  *
  * <h2>Background modes</h2>
  * The mode ($2105) decides how many backgrounds there are and how many colors their tiles have:
@@ -20,13 +30,9 @@ import java.util.Arrays;
  *    4    8bpp  2bpp   -     -    256 colors plus offset-per-tile*
  *    5    4bpp  2bpp   -     -    512-pixel hi-res*
  *    6    4bpp   -     -     -    hi-res plus offset-per-tile*
- *    7    rotation/scaling background (Milestone 6)
+ *    7    one rotating/scaling 8bpp layer (see Mode7Layer)
  * </pre>
  * <i>* Offset-per-tile and hi-res aren't implemented yet; those modes draw as plain layers.</i>
- *
- * <h2>Priority</h2>
- * Each background tile has a priority bit and each sprite has 2 priority bits. The mode decides
- * how those interleave; see {@link #priorityOrder}.
  */
 final class Renderer {
 
@@ -35,6 +41,8 @@ final class Renderer {
     static final int WIDTH = 256;
 
     private static final int SPRITES = 4;
+    /** Marks a screen pixel that no layer covers, so the backdrop shows. */
+    private static final int BACKDROP = 5;
 
     /** Bits per pixel of BG1-BG4 in each mode; 0 means the layer doesn't exist. */
     private static final int[][] BITS_PER_PIXEL = {
@@ -64,8 +72,8 @@ final class Renderer {
         {{4, 3}, {0, 1}, {4, 2}, {1, 1}, {4, 1}, {0, 0}, {4, 0}, {1, 0}},
         // Mode 6: S3 BG1h S2 S1 BG1l S0
         {{4, 3}, {0, 1}, {4, 2}, {4, 1}, {0, 0}, {4, 0}},
-        // Mode 7 (Milestone 6): sprites only for now
-        {{4, 3}, {4, 2}, {4, 1}, {4, 0}},
+        // Mode 7: S3 S2 BG2h S1 BG1 S0 BG2l (BG2 only exists with EXTBG)
+        {{4, 3}, {4, 2}, {1, 1}, {4, 1}, {0, 0}, {4, 0}, {1, 0}},
     };
 
     /** Mode 1 with the BG3 priority bit: BG3's high tiles jump to the very front. */
@@ -77,7 +85,15 @@ final class Renderer {
         new LayerLine(), new LayerLine(), new LayerLine(), new LayerLine(), new LayerLine(),
     };
     private final SpriteLayer sprites = new SpriteLayer();
+    private final Mode7Layer mode7 = new Mode7Layer();
+    private final WindowMasks windows = new WindowMasks();
     private final int[] frameBuffer = new int[WIDTH * MAX_LINES];
+
+    // The two screens, after priority resolution: which layer won each pixel, and its CGRAM index.
+    private final int[] mainSource = new int[WIDTH];
+    private final int[] mainColor = new int[WIDTH];
+    private final int[] subSource = new int[WIDTH];
+    private final int[] subColor = new int[WIDTH];
 
     /** Precomputed 15-bit color to 24-bit RGB, for each of the 16 brightness levels. */
     private final int[][] colorTable = new int[16][1 << 15];
@@ -99,29 +115,76 @@ final class Renderer {
             return;
         }
 
-        int[] bitsPerPixel = BITS_PER_PIXEL[ppu.bgMode];
-        for (int bg = 0; bg < 4; bg++) {
-            boolean enabled = bitsPerPixel[bg] != 0 && (ppu.mainScreenLayers & (1 << bg)) != 0;
-            if (enabled) {
+        drawLayers(y);
+        windows.compute(ppu);
+        int[][] order = priorityOrder();
+        resolveScreen(order, ppu.mainScreenLayers, ppu.mainScreenWindowedLayers, mainSource, mainColor);
+        resolveScreen(order, ppu.subScreenLayers, ppu.subScreenWindowedLayers, subSource, subColor);
+
+        int[] toRgb = colorTable[ppu.brightness];
+        for (int x = 0; x < WIDTH; x++) {
+            frameBuffer[rowStart + x] = toRgb[applyColorMath(x)];
+        }
+    }
+
+    // =============================================================================================
+    // Step 1: draw the layers
+    // =============================================================================================
+
+    private void drawLayers(int y) {
+        int usedLayers = ppu.mainScreenLayers | ppu.subScreenLayers;
+        // Vertical mosaic: every line of a block repeats the block's first line.
+        int mosaicY = y - (y % ppu.mosaicSize);
+
+        if (ppu.bgMode == 7) {
+            boolean bg1Mosaic = (ppu.mosaicLayers & 1) != 0;
+            mode7.renderLine(ppu, bg1Mosaic ? mosaicY : y, layers[0], layers[1]);
+            applyHorizontalMosaic(0);
+            layers[2].clear();
+            layers[3].clear();
+        } else {
+            int[] bitsPerPixel = BITS_PER_PIXEL[ppu.bgMode];
+            for (int bg = 0; bg < 4; bg++) {
+                boolean used = bitsPerPixel[bg] != 0 && (usedLayers & (1 << bg)) != 0;
+                if (!used) {
+                    layers[bg].clear();
+                    continue;
+                }
+                boolean mosaic = (ppu.mosaicLayers & (1 << bg)) != 0;
                 // Mode 0 gives each background its own 32-color slice of CGRAM.
                 int paletteOffset = ppu.bgMode == 0 ? bg * 32 : 0;
-                ppu.backgrounds[bg].renderLine(ppu.vram, y, bitsPerPixel[bg], paletteOffset, layers[bg]);
-            } else {
-                layers[bg].clear();
+                ppu.backgrounds[bg].renderLine(ppu.vram, mosaic ? mosaicY : y, bitsPerPixel[bg],
+                        paletteOffset, layers[bg]);
+                if (mosaic) {
+                    applyHorizontalMosaic(bg);
+                }
             }
         }
-        if ((ppu.mainScreenLayers & 0x10) != 0) {
+
+        if ((usedLayers & 0x10) != 0) {
             sprites.renderLine(ppu, y, layers[SPRITES]);
         } else {
             layers[SPRITES].clear();
         }
+    }
 
-        int[][] order = priorityOrder();
-        int[] colors = colorTable[ppu.brightness];
+    /** Horizontal mosaic: each block of pixels takes the color of its leftmost pixel. */
+    private void applyHorizontalMosaic(int bg) {
+        int size = ppu.mosaicSize;
+        if (size == 1 || (ppu.mosaicLayers & (1 << bg)) == 0) {
+            return;
+        }
+        LayerLine layer = layers[bg];
         for (int x = 0; x < WIDTH; x++) {
-            frameBuffer[rowStart + x] = colors[ppu.cgram[frontmostColor(order, x)]];
+            int blockStart = x - (x % size);
+            layer.color[x] = layer.color[blockStart];
+            layer.priority[x] = layer.priority[blockStart];
         }
     }
+
+    // =============================================================================================
+    // Step 3: combine layers into the main and sub screens
+    // =============================================================================================
 
     private int[][] priorityOrder() {
         if (ppu.bgMode == 1 && ppu.bg3HighPriority) {
@@ -130,17 +193,136 @@ final class Renderer {
         return PRIORITY_ORDERS[ppu.bgMode];
     }
 
-    /** The CGRAM index of the frontmost opaque layer at {@code x}, or 0 for the backdrop. */
-    private int frontmostColor(int[][] order, int x) {
-        for (int[] slot : order) {
-            LayerLine layer = layers[slot[0]];
-            int color = layer.color[x];
-            if (color != LayerLine.TRANSPARENT && layer.priority[x] == slot[1]) {
-                return color;
+    /**
+     * For each pixel, finds the frontmost opaque layer among {@code enabledLayers}, skipping
+     * layers hidden by their window there.
+     */
+    private void resolveScreen(int[][] order, int enabledLayers, int windowedLayers,
+                               int[] source, int[] color) {
+        for (int x = 0; x < WIDTH; x++) {
+            source[x] = BACKDROP;
+            color[x] = 0;
+            for (int[] slot : order) {
+                int layerIndex = slot[0];
+                if ((enabledLayers & (1 << layerIndex)) == 0) {
+                    continue;
+                }
+                LayerLine layer = layers[layerIndex];
+                if (layer.color[x] == LayerLine.TRANSPARENT || layer.priority[x] != slot[1]) {
+                    continue;
+                }
+                if ((windowedLayers & (1 << layerIndex)) != 0 && windows.masked[layerIndex][x]) {
+                    continue;
+                }
+                source[x] = layerIndex;
+                color[x] = layer.color[x];
+                break;
             }
         }
-        return 0;
     }
+
+    // =============================================================================================
+    // Step 4: color math
+    // =============================================================================================
+
+    /**
+     * Produces the final 15-bit color of pixel {@code x}.
+     *
+     * <p>CGWSEL ($2130):
+     * <pre>
+     *   bits 7-6  black out the main screen: 0 never, 1 outside color window, 2 inside, 3 always
+     *   bits 5-4  allow color math:          0 always, 1 inside color window, 2 outside, 3 never
+     *   bit 1     math with the sub screen (1) or with the fixed color (0)
+     * </pre>
+     * CGADSUB ($2131): bit 7 subtract instead of add, bit 6 halve the result, bits 5-0 which
+     * main-screen sources take part: backdrop, sprites, BG4, BG3, BG2, BG1. Sprites only
+     * take part if they use palettes 4-7, so games can keep some sprites out of the effect.
+     */
+    private int applyColorMath(int x) {
+        int control = ppu.colorMathControl;
+        boolean inColorWindow = windows.masked[WindowMasks.COLOR_WINDOW][x];
+
+        int mainColor15 = ppu.cgram[this.mainColor[x]];
+        boolean forcedBlack = windowCondition((control >> 6) & 3, inColorWindow, false);
+        if (forcedBlack) {
+            mainColor15 = 0;
+        }
+
+        boolean mathAllowed = windowCondition((control >> 4) & 3, inColorWindow, true);
+        if (!mathAllowed || !sourceTakesPartInMath(mainSource[x], this.mainColor[x])) {
+            return mainColor15;
+        }
+
+        // The other operand is the sub screen pixel or the fixed color. Where the sub screen is
+        // transparent, its "backdrop" is the fixed color, and the result isn't halved: halving
+        // is meant for blending two layers, not for tinting.
+        boolean useSubScreen = (control & 0x02) != 0;
+        int otherColor15;
+        boolean halve = (ppu.colorMathLayers & 0x40) != 0 && !forcedBlack;
+        if (useSubScreen && subSource[x] != BACKDROP) {
+            otherColor15 = ppu.cgram[subColor[x]];
+        } else {
+            otherColor15 = ppu.fixedColor;
+            if (useSubScreen) {
+                halve = false;
+            }
+        }
+        boolean subtract = (ppu.colorMathLayers & 0x80) != 0;
+        return blend(mainColor15, otherColor15, subtract, halve);
+    }
+
+    /**
+     * Decodes a CGWSEL two-bit window condition. For "black out" the codes mean never /
+     * outside / inside / always; for "allow math" they mean always / inside / outside / never.
+     */
+    private static boolean windowCondition(int code, boolean inWindow, boolean allowMath) {
+        if (allowMath) {
+            return switch (code) {
+                case 0 -> true;
+                case 1 -> inWindow;
+                case 2 -> !inWindow;
+                default -> false;
+            };
+        }
+        return switch (code) {
+            case 0 -> false;
+            case 1 -> !inWindow;
+            case 2 -> inWindow;
+            default -> true;
+        };
+    }
+
+    private boolean sourceTakesPartInMath(int source, int cgramIndex) {
+        int layerBits = ppu.colorMathLayers;
+        if (source == BACKDROP) {
+            return (layerBits & 0x20) != 0;
+        }
+        if (source == SPRITES) {
+            // Sprite colors are 128-255; palettes 4-7 are 192-255.
+            return (layerBits & 0x10) != 0 && cgramIndex >= 192;
+        }
+        return (layerBits & (1 << source)) != 0;
+    }
+
+    /** Adds or subtracts two 15-bit colors channel by channel, clamping each to 0-31. */
+    private static int blend(int a, int b, boolean subtract, boolean halve) {
+        int result = 0;
+        for (int shift = 0; shift <= 10; shift += 5) {
+            int channelA = (a >> shift) & 0x1F;
+            int channelB = (b >> shift) & 0x1F;
+            int channel = subtract ? channelA - channelB : channelA + channelB;
+            if (halve) {
+                channel >>= 1;
+            }
+            channel = Math.max(0, Math.min(31, channel));
+            result |= channel << shift;
+        }
+        return result;
+    }
+
+    // =============================================================================================
+    // Step 5: brightness and conversion to RGB
+    // =============================================================================================
 
     /**
      * SNES colors are 5 bits per channel. To get 8 bits we copy the top 3 bits into the bottom,

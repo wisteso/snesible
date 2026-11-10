@@ -16,7 +16,8 @@ package jfc.dma;
  *   $43xB, $43xF  unused, but readable and writable as one shared byte
  * </pre>
  *
- * <p>The HDMA registers are stored now but only used once HDMA is implemented (Milestone 6).
+ * <p>For HDMA, $43x5-$43x6 hold the current indirect data address, and $43x8-$43xA advance
+ * through the table as the frame is drawn.
  */
 final class DmaChannel {
 
@@ -30,8 +31,18 @@ final class DmaChannel {
     int hdmaLineCounter = 0xFF;
     int unused = 0xFF;
 
+    /** HDMA: whether this line's entry still has data to send (see DmaController). */
+    boolean hdmaDoTransfer;
+    /** HDMA: the table ended (a zero line count), so the channel is idle until next frame. */
+    boolean hdmaTerminated = true;
+
     boolean isBToA() {
         return (control & 0x80) != 0;
+    }
+
+    /** HDMA indirect mode: the table holds addresses of the data rather than the data itself. */
+    boolean isHdmaIndirect() {
+        return (control & 0x40) != 0;
     }
 
     int pattern() {

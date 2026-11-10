@@ -24,8 +24,19 @@ import jfc.system.MasterClock;
  *
  * <p>Writing a bit mask to $420B (MDMAEN) runs the selected channels in order 0-7.
  *
- * <p>HDMA ("H-blank DMA") uses the same channels to change registers once per scanline. It comes
- * in Milestone 6; for now $420C is only stored.
+ * <h2>HDMA</h2>
+ * HDMA ("H-blank DMA") uses the same channels to write a few bytes to PPU registers during
+ * the horizontal blank before each line. That's how games make gradients, wavy water, perspective
+ * floors and shaped windows without spending CPU time. Each enabled channel ($420C) walks a
+ * table in ROM or RAM made of entries:
+ * <pre>
+ *   line count byte:  bit 7 = repeat, bits 6-0 = number of lines (0 ends the table)
+ *   data:             one transfer unit (1, 2 or 4 bytes, by pattern) - or, in repeat mode,
+ *                     one unit for every line
+ *   (indirect mode:   a 16-bit pointer to the data instead of the data itself)
+ * </pre>
+ * Without the repeat bit, an entry sends one unit and then holds for the remaining lines.
+ * The table restarts from its beginning ($43x2-$43x3) at the top of every frame.
  */
 public final class DmaController {
 
@@ -74,13 +85,112 @@ public final class DmaController {
         channels[(address >> 4) & 7].write(address & 0xF, value);
     }
 
-    /** $420C HDMAEN: which channels run HDMA each frame (used from Milestone 6). */
+    /** $420C HDMAEN: which channels run HDMA. Takes effect from the next frame. */
     public void writeHdmaEnable(int value) {
         hdmaEnabled = value;
     }
 
     public int hdmaEnabled() {
         return hdmaEnabled;
+    }
+
+    // HDMA costs: fixed overhead per line, then per channel, per byte and per table byte read.
+    private static final int HDMA_LINE_OVERHEAD = 18;
+
+    /**
+     * Restarts the tables of all enabled HDMA channels. Runs at the top of every frame.
+     *
+     * @return master cycles the CPU is paused for
+     */
+    public int initHdma() {
+        int cycles = 0;
+        for (int i = 0; i < channels.length; i++) {
+            DmaChannel channel = channels[i];
+            channel.hdmaTerminated = true;
+            if ((hdmaEnabled & (1 << i)) == 0) {
+                continue;
+            }
+            channel.hdmaTableAddress = channel.aAddress;
+            channel.hdmaTerminated = false;
+            cycles += CYCLES_PER_CHANNEL + loadHdmaEntry(channel);
+        }
+        return cycles == 0 ? 0 : HDMA_LINE_OVERHEAD + cycles;
+    }
+
+    /**
+     * Performs one line's HDMA transfers. Runs in the horizontal blank of every line from 0
+     * through the last visible line.
+     *
+     * @return master cycles the CPU is paused for
+     */
+    public int runHdmaLine() {
+        int cycles = 0;
+        for (int i = 0; i < channels.length; i++) {
+            DmaChannel channel = channels[i];
+            if ((hdmaEnabled & (1 << i)) == 0 || channel.hdmaTerminated) {
+                continue;
+            }
+            cycles += CYCLES_PER_CHANNEL;
+            if (channel.hdmaDoTransfer) {
+                cycles += transferHdmaUnit(channel);
+            }
+            // Count the line off. The counter is 8 bits with the repeat flag on top, so
+            // repeat mode keeps transferring until the count part reaches zero.
+            channel.hdmaLineCounter = (channel.hdmaLineCounter - 1) & 0xFF;
+            channel.hdmaDoTransfer = (channel.hdmaLineCounter & 0x80) != 0;
+            if ((channel.hdmaLineCounter & 0x7F) == 0) {
+                cycles += loadHdmaEntry(channel);
+            }
+        }
+        return cycles == 0 ? 0 : HDMA_LINE_OVERHEAD + cycles;
+    }
+
+    /** Reads the next table entry's header (line count, and pointer in indirect mode). */
+    private int loadHdmaEntry(DmaChannel channel) {
+        channel.hdmaLineCounter = readTableByte(channel);
+        int cycles = CYCLES_PER_BYTE;
+        if (channel.isHdmaIndirect()) {
+            int low = readTableByte(channel);
+            int high = readTableByte(channel);
+            channel.byteCount = (high << 8) | low; // $43x5-6 hold the indirect address
+            cycles += 2 * CYCLES_PER_BYTE;
+        }
+        if (channel.hdmaLineCounter == 0) {
+            channel.hdmaTerminated = true;
+        }
+        channel.hdmaDoTransfer = true;
+        return cycles;
+    }
+
+    private int readTableByte(DmaChannel channel) {
+        int address = (channel.aBank << 16) | channel.hdmaTableAddress;
+        channel.hdmaTableAddress = (channel.hdmaTableAddress + 1) & 0xFFFF;
+        return isReachableByDma(address) ? bus.readA(address) : 0;
+    }
+
+    /** Sends one transfer unit, taking the data from the table or the indirect address. */
+    private int transferHdmaUnit(DmaChannel channel) {
+        int[] pattern = PATTERNS[channel.pattern()];
+        for (int offset : pattern) {
+            int aAddress;
+            if (channel.isHdmaIndirect()) {
+                aAddress = (channel.indirectBank << 16) | channel.byteCount;
+                channel.byteCount = (channel.byteCount + 1) & 0xFFFF;
+            } else {
+                aAddress = (channel.aBank << 16) | channel.hdmaTableAddress;
+                channel.hdmaTableAddress = (channel.hdmaTableAddress + 1) & 0xFFFF;
+            }
+            int bRegister = (channel.bBusRegister + offset) & 0xFF;
+            if (channel.isBToA()) {
+                int value = bus.readB(bRegister);
+                if (isReachableByDma(aAddress)) {
+                    bus.writeA(aAddress, value);
+                }
+            } else {
+                bus.writeB(bRegister, isReachableByDma(aAddress) ? bus.readA(aAddress) : 0);
+            }
+        }
+        return pattern.length * CYCLES_PER_BYTE;
     }
 
     /**

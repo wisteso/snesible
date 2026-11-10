@@ -58,6 +58,8 @@ public final class MasterClock {
     private int h;
     private int v;
     private long frameCount;
+    /** Cycles other chips have taken from the CPU, still to be added (see {@link #stall}). */
+    private int pendingStall;
 
     public MasterClock(boolean pal) {
         this.linesPerFrame = pal ? LINES_PER_FRAME_PAL : LINES_PER_FRAME_NTSC;
@@ -67,9 +69,20 @@ public final class MasterClock {
         this.listener = listener;
     }
 
+    /**
+     * Pauses the CPU for {@code cycles} while something else uses the bus, as HDMA does.
+     * Listeners call this while the clock is in the middle of {@link #advance}, so the time
+     * can't be added on the spot. It's added to the advance in progress instead.
+     */
+    public void stall(int cycles) {
+        pendingStall += cycles;
+    }
+
     /** Lets time pass. Called by the bus for every CPU cycle and by DMA for each transfer. */
     public void advance(int cycles) {
-        while (cycles > 0) {
+        while (cycles > 0 || pendingStall > 0) {
+            cycles += pendingStall;
+            pendingStall = 0;
             // Move at most to the end of the current line, so each span stays within one line.
             int chunk = Math.min(cycles, CYCLES_PER_LINE - h);
             if (h <= REFRESH_POSITION && REFRESH_POSITION < h + chunk) {
