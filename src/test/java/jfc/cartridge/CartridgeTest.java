@@ -4,7 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class CartridgeTest {
 
@@ -106,6 +110,40 @@ class CartridgeTest {
         assertEquals(cart.read(0xC1ABCD), cart.read(0x01ABCD), "upper half visible in bank $01");
         assertEquals(cart.read(0xC1ABCD), cart.read(0x41ABCD), "banks $40-$7D mirror $C0-$FF");
         assertEquals(Cartridge.OPEN_BUS, cart.read(0x011234));
+    }
+
+    @Test
+    void sramSurvivesASaveAndReload(@TempDir Path dir) throws IOException {
+        byte[] rom = TestRoms.build(MapMode.LOROM, 128 * KIB, 1, 0x8000);
+        Cartridge cart = Cartridge.fromFileBytes(rom);
+        Path saveFile = dir.resolve("game.srm");
+        cart.write(0x700000, 0x12);
+        cart.write(0x7007FF, 0x34);
+        assertTrue(cart.hasUnsavedSram());
+
+        cart.saveSramTo(saveFile);
+        Cartridge reloaded = Cartridge.fromFileBytes(rom);
+        reloaded.loadSramFrom(saveFile);
+
+        assertFalse(cart.hasUnsavedSram());
+        assertEquals(2 * KIB, Files.size(saveFile));
+        assertEquals(0x12, reloaded.read(0x700000));
+        assertEquals(0x34, reloaded.read(0x7007FF));
+    }
+
+    @Test
+    void writingTheSameValueDoesNotMarkSramChanged() {
+        Cartridge cart = Cartridge.fromFileBytes(TestRoms.build(MapMode.LOROM, 128 * KIB, 1, 0x8000));
+
+        cart.write(0x700000, 0x00);
+
+        assertFalse(cart.hasUnsavedSram());
+    }
+
+    @Test
+    void saveFileSitsNextToTheRom() {
+        assertEquals(Path.of("roms", "Super Mario World.srm"),
+                Cartridge.saveFileFor(Path.of("roms", "Super Mario World.sfc")));
     }
 
     @Test

@@ -9,6 +9,8 @@ import jfc.cartridge.CartridgeHeader;
 import jfc.cpu.Registers;
 import jfc.system.Snes;
 import jfc.ui.EmulatorWindow;
+import jfc.ui.input.GamepadMapping;
+import jfc.ui.input.Gamepads;
 
 /** Command-line entry point. */
 public final class Main {
@@ -16,11 +18,21 @@ public final class Main {
     private Main() {
     }
 
-    public static void main(String[] args) throws IOException {
+    /** Optional gamepad button mapping, looked for in the working directory. */
+    private static final Path GAMEPAD_MAPPING_FILE = Path.of("gamepad.properties");
+
+    public static void main(String[] args) throws IOException, InterruptedException {
         if (args.length == 1 && !args[0].startsWith("--")) {
-            Cartridge cart = Cartridge.load(Path.of(args[0]));
+            Path romFile = Path.of(args[0]);
+            Cartridge cart = Cartridge.load(romFile);
             System.out.println(EmulatorWindow.CONTROLS_HELP);
-            new EmulatorWindow(new Snes(cart), cart.header().title()).start();
+            Gamepads gamepads = Gamepads.open(GamepadMapping.load(GAMEPAD_MAPPING_FILE)).orElse(null);
+            Path saveFile = cart.header().hasBattery() ? Cartridge.saveFileFor(romFile) : null;
+            new EmulatorWindow(new Snes(cart), cart.header().title(), saveFile, gamepads).start();
+            return;
+        }
+        if (args.length == 1 && args[0].equals("--gamepad-test")) {
+            GamepadTest.run(GamepadMapping.load(GAMEPAD_MAPPING_FILE));
             return;
         }
         if (args.length >= 2 && args[0].equals("--info")) {
@@ -43,6 +55,7 @@ public final class Main {
         System.err.println("""
                 Usage:
                   jfc <rom-file>                 Play a game in a window
+                  jfc --gamepad-test             Show gamepad button numbers (for gamepad.properties)
                   jfc --info <rom-file>...       Print the cartridge header of each ROM
                   jfc --run <rom-file> [frames] [BUTTON@frame ...]
                                                  Run without video and report what the CPU does

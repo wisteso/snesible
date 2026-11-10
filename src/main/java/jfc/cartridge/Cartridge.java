@@ -3,6 +3,7 @@ package jfc.cartridge;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 
 /**
@@ -30,6 +31,8 @@ public final class Cartridge {
     private final MapMode mapMode;
     private final Mapper mapper;
     private final boolean hadCopierHeader;
+    /** Set when the game writes SRAM, so the emulator knows the save file is out of date. */
+    private boolean sramChanged;
 
     private Cartridge(byte[] rom, MapMode mapMode, boolean hadCopierHeader) {
         this.rom = rom;
@@ -79,9 +82,52 @@ public final class Cartridge {
     /** Writes one byte. Only SRAM is writable, and writes elsewhere are ignored, as on hardware. */
     public void write(int address, int value) {
         int sramOffset = mapper.sramOffset(address);
-        if (sramOffset != Mapper.NOT_MAPPED) {
+        if (sramOffset != Mapper.NOT_MAPPED && sram[sramOffset] != (byte) value) {
             sram[sramOffset] = (byte) value;
+            sramChanged = true;
         }
+    }
+
+    // =============================================================================================
+    // Battery-backed save RAM
+    // =============================================================================================
+
+    /** True if SRAM has changed since the last {@link #saveSramTo} or {@link #loadSramFrom}. */
+    public boolean hasUnsavedSram() {
+        return sramChanged && header.hasBattery();
+    }
+
+    /**
+     * Writes SRAM to a file (the usual ".srm" format: the raw bytes, nothing else). The data is
+     * written to a temporary file that then replaces the real one, so a crash mid-write can't
+     * leave a corrupt save.
+     */
+    public void saveSramTo(Path file) throws IOException {
+        Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
+        Files.write(temporary, sram);
+        Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        sramChanged = false;
+    }
+
+    /**
+     * Restores SRAM from a save file, if it exists. A file of the wrong size is used as far as
+     * it goes (other emulators sometimes pad or trim saves).
+     */
+    public void loadSramFrom(Path file) throws IOException {
+        if (!Files.isRegularFile(file)) {
+            return;
+        }
+        byte[] saved = Files.readAllBytes(file);
+        System.arraycopy(saved, 0, sram, 0, Math.min(saved.length, sram.length));
+        sramChanged = false;
+    }
+
+    /** The save file that belongs to a ROM: same name, ".srm" extension. */
+    public static Path saveFileFor(Path romFile) {
+        String name = romFile.getFileName().toString();
+        int dot = name.lastIndexOf('.');
+        String base = dot > 0 ? name.substring(0, dot) : name;
+        return romFile.resolveSibling(base + ".srm");
     }
 
     /**

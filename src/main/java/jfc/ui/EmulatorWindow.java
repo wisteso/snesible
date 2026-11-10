@@ -11,6 +11,8 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.swing.JComponent;
@@ -18,6 +20,7 @@ import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import jfc.cpu.io.JoypadPorts;
 import jfc.system.Snes;
+import jfc.ui.input.Gamepads;
 
 /**
  * A Swing window that runs the emulator and shows its picture.
@@ -32,7 +35,12 @@ import jfc.system.Snes;
  * They share only the image (guarded by a lock) and the button state (an atomic integer).
  *
  * <p>Keys: arrows = D-pad, X = A, Z = B, S = X, A = Y, Q = L, W = R, Enter = Start,
- * Shift or Backspace = Select, Escape = quit.
+ * Shift or Backspace = Select, Escape = quit. Gamepads are read by the emulation thread; the
+ * first one plays together with the keyboard as controller 1, a second one as controller 2.
+ *
+ * <p>Battery-backed SRAM is written to the save file shortly after the game changes it, and
+ * again when the window closes. A real cartridge's battery keeps SRAM alive the whole time,
+ * so there's no "save" step to imitate; we just keep the file up to date.
  */
 public final class EmulatorWindow {
 
@@ -66,8 +74,14 @@ public final class EmulatorWindow {
             Map.entry(KeyEvent.VK_SHIFT, JoypadPorts.BUTTON_SELECT),
             Map.entry(KeyEvent.VK_BACK_SPACE, JoypadPorts.BUTTON_SELECT));
 
+    /** Save SRAM at most this often while the game keeps changing it (about once a second). */
+    private static final int SAVE_INTERVAL_FRAMES = 60;
+
     private final Snes snes;
     private final String title;
+    private final Path saveFile;
+    private final Gamepads gamepads;
+    private final int[] gamepadButtons = new int[2];
     private final BufferedImage image = new BufferedImage(256, 239, BufferedImage.TYPE_INT_RGB);
     private final int[] imagePixels = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
     private final Object imageLock = new Object();
@@ -78,16 +92,23 @@ public final class EmulatorWindow {
     private JFrame frame;
     private Display display;
 
-    public EmulatorWindow(Snes snes, String title) {
+    /**
+     * @param saveFile where battery-backed SRAM is kept, or null for no saving
+     * @param gamepads gamepad input, or null for keyboard only
+     */
+    public EmulatorWindow(Snes snes, String title, Path saveFile, Gamepads gamepads) {
         this.snes = snes;
         this.title = title;
+        this.saveFile = saveFile;
+        this.gamepads = gamepads;
     }
 
     /** Opens the window and starts emulating. Returns immediately. */
     public void start() {
         SwingUtilities.invokeLater(this::createWindow);
+        // Not a daemon thread: when the window closes, the JVM waits for this thread to leave
+        // its loop and write the final save before exiting.
         Thread emulation = new Thread(this::emulationLoop, "emulation");
-        emulation.setDaemon(true);
         emulation.start();
     }
 
@@ -140,12 +161,21 @@ public final class EmulatorWindow {
         long fpsWindowStart = System.nanoTime();
         int framesInWindow = 0;
 
+        loadSave();
         snes.reset();
+        long frameNumber = 0;
         while (running) {
-            snes.joypads().setPressed(0, heldButtons.get());
+            if (gamepads != null) {
+                gamepads.poll(gamepadButtons);
+            }
+            snes.joypads().setPressed(0, heldButtons.get() | gamepadButtons[0]);
+            snes.joypads().setPressed(1, gamepadButtons[1]);
             snes.runFrame();
             publishFrame();
             framesInWindow++;
+            if (++frameNumber % SAVE_INTERVAL_FRAMES == 0) {
+                writeSaveIfChanged();
+            }
 
             nextFrameTime += framePeriod;
             long now = System.nanoTime();
@@ -165,6 +195,29 @@ public final class EmulatorWindow {
                 framesInWindow = 0;
                 fpsWindowStart = now;
             }
+        }
+        writeSaveIfChanged();
+    }
+
+    private void loadSave() {
+        if (saveFile == null || !snes.cartridge().header().hasBattery()) {
+            return;
+        }
+        try {
+            snes.cartridge().loadSramFrom(saveFile);
+        } catch (IOException e) {
+            System.err.println("Couldn't read save file " + saveFile + ": " + e.getMessage());
+        }
+    }
+
+    private void writeSaveIfChanged() {
+        if (saveFile == null || !snes.cartridge().hasUnsavedSram()) {
+            return;
+        }
+        try {
+            snes.cartridge().saveSramTo(saveFile);
+        } catch (IOException e) {
+            System.err.println("Couldn't write save file " + saveFile + ": " + e.getMessage());
         }
     }
 
