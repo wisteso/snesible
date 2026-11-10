@@ -694,6 +694,8 @@ public final class Cpu {
      * registers where adding the index didn't carry into a new page.
      */
     private void indexingPenalty(int base, int indexed, Access access) {
+        // Dropping the low 8 bits leaves the page (and bank); if those differ, the addition
+        // carried out of the low byte and the CPU needed a cycle to fix up the high byte.
         boolean crossedPage = (base & 0xFFFF00) != (indexed & 0xFFFF00);
         if (access == WRITE || !isIndex8Bit() || crossedPage) {
             idle();
@@ -831,9 +833,12 @@ public final class Cpu {
                     // The top digit is corrected after V is computed (below).
                     break;
                 }
+                // "result" covers this digit and those below it. It exceeds 9 in this digit
+                // exactly when it's above 9 followed by all-ones below (e.g. $9F for digit 1).
                 if (result > (0x9 << shift | lowerMask)) {
                     result += 0x6 << shift;
                 }
+                // Anything above $F (or $FF, ...) in these digits carries into the next one.
                 carry = result > (digitMask | lowerMask) ? 1 : 0;
             }
         }

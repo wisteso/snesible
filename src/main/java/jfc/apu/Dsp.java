@@ -205,6 +205,8 @@ final class Dsp {
 
     /** The noise generator: a 15-bit linear feedback shift register, used by voices in NON. */
     private void stepNoise() {
+        // The new top bit (bit 14) is bit 0 XOR bit 1 of the old value: shifting left by 14 and
+        // 13 lines those two bits up at bit 14. Everything else shifts down by one.
         int feedback = (noise << 13) ^ (noise << 14);
         noise = (feedback & 0x4000) | (noise >> 1);
     }
@@ -290,6 +292,9 @@ final class Dsp {
      * part of the SNES's characteristic sound.
      */
     private static int interpolate(Voice voice) {
+        // The position is fixed point: the bits above 12 count whole samples past the oldest
+        // buffered one, the low 12 bits are the fraction between samples. The interpolation
+        // table only has 256 steps, so the top 8 bits of the fraction choose the weights.
         int[] weights = GAUSSIAN[(voice.interpolationPosition >> 4) & 0xFF];
         int start = voice.bufferPosition + (voice.interpolationPosition >> 12);
         int result = 0;
@@ -378,9 +383,17 @@ final class Dsp {
             voice.brrNibble++;
 
             int sample = (nibble << 28) >> 28;              // sign-extend 4 bits
+            // Scale by the range (a left shift of 0-12), landing at half scale (the >> 1).
+            // Ranges 13-15 aren't valid; the hardware treats them as "0 or -2048 by sign".
             sample = range <= 12 ? (sample << range) >> 1 : (sample < 0 ? -2048 : 0);
 
             // Prediction filters: add a weighted guess based on the two previous samples.
+            // The new sample is at half scale, as is p2 (thanks to its >> 1); p1 is kept at full
+            // scale, so each p1 term below is twice what it looks like. The shifts work out to:
+            //   filter 1:  + 15/16 * previous
+            //   filter 2:  + 61/32 * previous  - 15/16 * the one before
+            //   filter 3:  + 115/64 * previous - 13/16 * the one before
+            // Hardware computes these with shifts, rounding down at each step; so do we.
             int p1 = voice.buffer[(voice.bufferPosition + 11) % 12];
             int p2 = voice.buffer[(voice.bufferPosition + 10) % 12] >> 1;
             switch (filter) {

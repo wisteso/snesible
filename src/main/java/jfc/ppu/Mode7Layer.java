@@ -56,6 +56,8 @@ final class Mode7Layer {
             int x = flipX ? 255 - screenX : screenX;
             int mapX = (originX + a * x) >> 8;
             int mapY = (originY + c * x) >> 8;
+            // Inside the map means both coordinates are 0-1023: no bits set above bit 9
+            // (negative numbers have all their high bits set, so they count as outside too).
             boolean outside = ((mapX | mapY) & ~0x3FF) != 0;
 
             int tile;
@@ -66,8 +68,11 @@ final class Mode7Layer {
             } else if (outside && outsideMode == 3) {
                 tile = 0;
             } else {
+                // Tilemap: 128 tiles per row, one per word, in the low byte. (Masking with 127
+                // makes positions outside the map wrap around: the "repeat" behavior.)
                 tile = ppu.vram[((mapY >> 3) & 127) * 128 + ((mapX >> 3) & 127)] & 0xFF;
             }
+            // Tile graphics: 64 words per tile, one pixel per word, in the high byte.
             int pixel = (ppu.vram[tile * 64 + (mapY & 7) * 8 + (mapX & 7)] >> 8) & 0xFF;
 
             bg1.color[screenX] = pixel == 0 ? LayerLine.TRANSPARENT : pixel;
