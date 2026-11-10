@@ -28,7 +28,9 @@ import jfc.ui.input.Gamepads;
  * <p>Two threads are involved:
  * <ul>
  *   <li>The <b>emulation thread</b> runs one frame at a time, copies the finished picture into
- *       an image, and sleeps until the next frame is due (about 60 per second on NTSC).</li>
+ *       an image, and plays the frame's audio. Playing blocks until the sound device has room,
+ *       which keeps the emulator at the console's real speed (about 60 frames per second on
+ *       NTSC). Without a sound device it sleeps until each frame is due instead.</li>
  *   <li>Swing's <b>event thread</b> paints that image and turns key presses into controller
  *       buttons.</li>
  * </ul>
@@ -161,6 +163,14 @@ public final class EmulatorWindow {
         long fpsWindowStart = System.nanoTime();
         int framesInWindow = 0;
 
+        // With a sound device, playing each frame's audio paces the emulation (it blocks while
+        // the device's buffer is full). Without one, we sleep until each frame is due instead.
+        AudioOutput audio = AudioOutput.open().orElse(null);
+        if (audio == null) {
+            System.out.println("No sound device available; running without sound.");
+        }
+        short[] samples = new short[4096];
+
         loadSave();
         snes.reset();
         long frameNumber = 0;
@@ -177,12 +187,19 @@ public final class EmulatorWindow {
                 writeSaveIfChanged();
             }
 
-            nextFrameTime += framePeriod;
-            long now = System.nanoTime();
-            if (now < nextFrameTime) {
-                sleepNanos(nextFrameTime - now);
-            } else if (now - nextFrameTime > 5 * framePeriod) {
-                nextFrameTime = now; // fell far behind (e.g. a pause): don't try to catch up
+            int sampleCount = snes.apu().drainSamples(samples);
+            long now;
+            if (audio != null) {
+                audio.play(samples, sampleCount);
+                now = System.nanoTime();
+            } else {
+                nextFrameTime += framePeriod;
+                now = System.nanoTime();
+                if (now < nextFrameTime) {
+                    sleepNanos(nextFrameTime - now);
+                } else if (now - nextFrameTime > 5 * framePeriod) {
+                    nextFrameTime = now; // fell far behind (e.g. a pause): don't try to catch up
+                }
             }
 
             if (now - fpsWindowStart >= 1_000_000_000L) {
@@ -195,6 +212,9 @@ public final class EmulatorWindow {
                 framesInWindow = 0;
                 fpsWindowStart = now;
             }
+        }
+        if (audio != null) {
+            audio.close();
         }
         writeSaveIfChanged();
     }

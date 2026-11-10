@@ -47,6 +47,11 @@ public final class Main {
             runHeadless(Path.of(args[1]), frames, new InputScript(presses));
             return;
         }
+        if (args.length >= 4 && args[0].equals("--record-audio")) {
+            String[] presses = java.util.Arrays.copyOfRange(args, 4, args.length);
+            AudioRecording.record(Path.of(args[1]), Integer.parseInt(args[2]), Path.of(args[3]), presses);
+            return;
+        }
         if (args.length >= 4 && args[0].equals("--screenshot")) {
             String[] presses = java.util.Arrays.copyOfRange(args, 4, args.length);
             Screenshot.take(Path.of(args[1]), Integer.parseInt(args[2]), Path.of(args[3]), presses);
@@ -61,7 +66,9 @@ public final class Main {
                                                  Run without video and report what the CPU does
                   jfc --screenshot <rom-file> <frames> <out.png> [BUTTON@frame ...]
                                                  Run headless and save the last frame as a PNG,
-                                                 pressing buttons (e.g. START@200) on the way""");
+                                                 pressing buttons (e.g. START@200) on the way
+                  jfc --record-audio <rom-file> <frames> <out.wav> [BUTTON@frame ...]
+                                                 Run headless and save the sound as a WAV file""");
         System.exit(1);
     }
 
