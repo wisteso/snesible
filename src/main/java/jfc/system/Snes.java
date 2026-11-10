@@ -74,8 +74,14 @@ public final class Snes implements MasterClock.Listener {
         }
     }
 
+    /** HDMA runs at about dot 276, just after the visible part of each line ends. */
+    private static final int HDMA_POSITION = 1104;
+
     @Override
     public void onLineStart(int line) {
+        if (line == 0) {
+            clock.stall(dma.initHdma());
+        }
         ppu.onLineStart(line);
         interrupts.onLineStart(line);
         if (line == ppu.vblankStartLine()) {
@@ -86,9 +92,18 @@ public final class Snes implements MasterClock.Listener {
         }
     }
 
+    /**
+     * HDMA for picture line n happens in the horizontal blank at the end of beam line n, so
+     * that its register changes are in place when line n+1 (where picture line n appears)
+     * starts. That's also exactly when our renderer draws it.
+     */
     @Override
     public void onBeamMoved(int line, int fromH, int toH) {
         interrupts.onBeamMoved(line, fromH, toH);
+        boolean hdmaLine = line < ppu.vblankStartLine();
+        if (hdmaLine && fromH <= HDMA_POSITION && HDMA_POSITION < toH) {
+            clock.stall(dma.runHdmaLine());
+        }
     }
 
     // ---- Component access, for the user interface, tests and debugging tools

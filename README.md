@@ -74,7 +74,7 @@ mvn test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
 | `jfc.cpu.io`    | The rest of the 5A22: NMI/IRQ timers, multiply/divide, joypad ports    |
 | `jfc.dma`       | The 5A22's 8-channel DMA controller                                   |
 | `jfc.bus`       | Memory map and per-access timing (A-bus and B-bus)                    |
-| `jfc.ppu`       | Picture processor: memory ports, backgrounds, sprites, compositing    |
+| `jfc.ppu`       | Picture processor: backgrounds, sprites, Mode 7, windows, color math  |
 | `jfc.apu`       | Audio unit ports; a handshake stub until Milestone 7                   |
 | `jfc.system`    | The console: master clock, work RAM, and wiring it all together       |
 | `jfc.ui`        | Swing window, frame pacing and keyboard input                        |
@@ -87,7 +87,7 @@ mvn test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
 3. ~~Bus, DMA, interrupts, APU handshake stub~~
 4. ~~PPU: backgrounds and sprites, plus a window with keyboard input~~
 5. ~~Battery saves (SRAM), gamepad input~~
-6. PPU: windows, color math, HDMA, Mode 7
+6. ~~PPU: windows, color math, HDMA, Mode 7, mosaic~~
 7. Real APU: SPC700 and DSP audio
 8. Debug and state-viewer tools
 

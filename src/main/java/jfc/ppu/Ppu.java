@@ -17,9 +17,8 @@ import jfc.system.MasterClock;
  * <p>This class holds that state and the register interface. Drawing is done by the
  * {@link Renderer}, which reads the state here once per scanline.
  *
- * <p><b>Not yet decoded</b> (stored raw until Milestone 6): mosaic ($2106), Mode 7 matrix and
- * center ($211A, $211D-$2120), windows ($2123-$212B, $212E-$212F) and color math
- * ($2130-$2132).
+ * <p><b>Not emulated yet:</b> hi-res modes 5/6 and pseudo-hi-res, interlace, offset-per-tile
+ * (modes 2, 4, 6) and direct color.
  */
 public final class Ppu {
 
@@ -34,9 +33,6 @@ public final class Ppu {
     final int[] vram = new int[VRAM_WORDS];
     final int[] cgram = new int[CGRAM_COLORS];
     final int[] oam = new int[OAM_BYTES];
-
-    /** Raw values of registers that aren't decoded yet (see class comment). */
-    final int[] rawRegisters = new int[0x40];
 
     // ---- $2100 INIDISP: display control
     /** Forced blank turns the picture off so VRAM can be accessed safely at any time. */
@@ -73,6 +69,48 @@ public final class Ppu {
     int mainScreenLayers;
     int subScreenLayers;
 
+    // ---- $2106 MOSAIC: blocky pixelation, used for transitions
+    /** Size of a mosaic block, 1 (off) to 16 pixels square. */
+    int mosaicSize = 1;
+    /** Bits 0-3: which of BG1-BG4 are pixelated. */
+    int mosaicLayers;
+
+    // ---- $211A-$2120 and $210D-$210E: Mode 7 (see Mode7Layer)
+    int mode7Settings;
+    int mode7A;
+    int mode7B;
+    int mode7C;
+    int mode7D;
+    int mode7CenterX;
+    int mode7CenterY;
+    int mode7HScroll;
+    int mode7VScroll;
+
+    // ---- $2123-$212B, $212E-$212F: windows (see WindowMasks)
+    /** Window settings for BG1-BG4, sprites and the color window: 4 bits each. */
+    final int[] windowSettings = new int[6];
+    /** How each layer combines its two windows: 0 OR, 1 AND, 2 XOR, 3 XNOR. */
+    final int[] windowLogic = new int[6];
+    int window1Left;
+    int window1Right;
+    int window2Left;
+    int window2Right;
+    /** Which layers the windows hide on the main screen (TMW) and sub screen (TSW). */
+    int mainScreenWindowedLayers;
+    int subScreenWindowedLayers;
+
+    // ---- $2130-$2132: color math (see Renderer)
+    /** CGWSEL: when to black out the main screen and when to allow math; sub screen vs fixed. */
+    int colorMathControl;
+    /** CGADSUB: subtract/half flags and which layers take part. */
+    int colorMathLayers;
+    /** COLDATA: the fixed color, 15-bit BGR. It's also the sub screen's backdrop. */
+    int fixedColor;
+
+    // ---- $2133 SETINI
+    /** Bit 6 EXTBG (Mode 7's second layer), bit 2 overscan; the rest isn't emulated yet. */
+    int screenSettings;
+
     // ---- VRAM port ($2115-$2119, $2139-$213A)
     private int vramAddress;
     private int vramIncrement = 1;
@@ -101,10 +139,8 @@ public final class Ppu {
     /** More than 34 sprite tiles (8 pixels wide each) were needed on one line. */
     boolean timeOver;
 
-    // ---- Mode 7 multiplier ($211B-$211C, $2134-$2136)
+    /** The latch shared by all write-twice Mode 7 registers (also used by the multiplier). */
     private int mode7Latch;
-    private int mode7A;
-    private int mode7B;
 
     // ---- H/V counter latch ($2137, $213C-$213D, $213F)
     private int latchedH;
@@ -121,7 +157,12 @@ public final class Ppu {
 
     /** True in overscan mode ($2133 bit 2): 239 visible lines instead of 224. */
     public boolean isOverscan() {
-        return (rawRegisters[0x33] & 0x04) != 0;
+        return (screenSettings & 0x04) != 0;
+    }
+
+    /** EXTBG ($2133 bit 6): Mode 7 also shows a second layer with per-pixel priority. */
+    boolean isMode7ExtBg() {
+        return (screenSettings & 0x40) != 0;
     }
 
     /** How many picture lines a frame has: 224, or 239 with overscan. */
@@ -192,6 +233,10 @@ public final class Ppu {
             }
             case 0x04 -> writeOam(value);
             case 0x05 -> writeBgMode(value);
+            case 0x06 -> {
+                mosaicSize = (value >> 4) + 1;
+                mosaicLayers = value & 0x0F;
+            }
             case 0x07, 0x08, 0x09, 0x0A -> backgrounds[register - 0x07].writeTilemapSettings(value);
             case 0x0B -> {
                 backgrounds[0].tileBase = (value & 0x0F) << 12;
@@ -201,27 +246,64 @@ public final class Ppu {
                 backgrounds[2].tileBase = (value & 0x0F) << 12;
                 backgrounds[3].tileBase = (value >> 4) << 12;
             }
-            // Scroll registers come in pairs, H then V, for BG1 through BG4.
-            case 0x0D, 0x0F, 0x11, 0x13 -> writeHorizontalScroll(backgrounds[(register - 0x0D) / 2], value);
-            case 0x0E, 0x10, 0x12, 0x14 -> writeVerticalScroll(backgrounds[(register - 0x0E) / 2], value);
+            // Scroll registers come in pairs, H then V, for BG1 through BG4. BG1's pair also
+            // sets the Mode 7 scroll, which is 13 bits and uses the Mode 7 latch instead.
+            case 0x0D -> {
+                writeHorizontalScroll(backgrounds[0], value);
+                mode7HScroll = writeMode7Register(value) & 0x1FFF;
+            }
+            case 0x0E -> {
+                writeVerticalScroll(backgrounds[0], value);
+                mode7VScroll = writeMode7Register(value) & 0x1FFF;
+            }
+            case 0x0F, 0x11, 0x13 -> writeHorizontalScroll(backgrounds[(register - 0x0D) / 2], value);
+            case 0x10, 0x12, 0x14 -> writeVerticalScroll(backgrounds[(register - 0x0E) / 2], value);
             case 0x15 -> writeVramControl(value);
             case 0x16 -> setVramAddress((vramAddress & 0xFF00) | value);
             case 0x17 -> setVramAddress((vramAddress & 0x00FF) | (value << 8));
             case 0x18 -> writeVram(value, false);
             case 0x19 -> writeVram(value, true);
+            case 0x1A -> mode7Settings = value;
             case 0x1B -> mode7A = writeMode7Register(value);
             case 0x1C -> mode7B = writeMode7Register(value);
+            case 0x1D -> mode7C = writeMode7Register(value);
+            case 0x1E -> mode7D = writeMode7Register(value);
+            case 0x1F -> mode7CenterX = writeMode7Register(value) & 0x1FFF;
+            case 0x20 -> mode7CenterY = writeMode7Register(value) & 0x1FFF;
             case 0x21 -> {
                 cgramAddress = value;
                 cgramSecondByte = false;
             }
             case 0x22 -> writeCgram(value);
+            // Window settings pack two layers per register, four bits each.
+            case 0x23, 0x24, 0x25 -> {
+                int firstLayer = (register - 0x23) * 2;
+                windowSettings[firstLayer] = value & 0x0F;
+                windowSettings[firstLayer + 1] = value >> 4;
+            }
+            case 0x26 -> window1Left = value;
+            case 0x27 -> window1Right = value;
+            case 0x28 -> window2Left = value;
+            case 0x29 -> window2Right = value;
+            case 0x2A -> {
+                for (int bg = 0; bg < 4; bg++) {
+                    windowLogic[bg] = (value >> (bg * 2)) & 3;
+                }
+            }
+            case 0x2B -> {
+                windowLogic[4] = value & 3;
+                windowLogic[5] = (value >> 2) & 3;
+            }
             case 0x2C -> mainScreenLayers = value & 0x1F;
             case 0x2D -> subScreenLayers = value & 0x1F;
+            case 0x2E -> mainScreenWindowedLayers = value & 0x1F;
+            case 0x2F -> subScreenWindowedLayers = value & 0x1F;
+            case 0x30 -> colorMathControl = value;
+            case 0x31 -> colorMathLayers = value;
+            case 0x32 -> writeFixedColor(value);
+            case 0x33 -> screenSettings = value;
             default -> {
-                if (register < rawRegisters.length) {
-                    rawRegisters[register] = value;
-                }
+                // $2134-$213F are read-only; writes to them do nothing.
             }
         }
     }
@@ -457,6 +539,24 @@ public final class Ppu {
         int combined = (value << 8) | mode7Latch;
         mode7Latch = value;
         return combined;
+    }
+
+    /**
+     * $2132 COLDATA: bits 7-5 choose which channels (blue, green, red) to set, and bits 4-0 give
+     * the intensity. Games often write it three times, once per channel, or once to set all
+     * three to the same gray.
+     */
+    private void writeFixedColor(int value) {
+        int intensity = value & 0x1F;
+        if ((value & 0x20) != 0) {
+            fixedColor = (fixedColor & ~0x001F) | intensity;
+        }
+        if ((value & 0x40) != 0) {
+            fixedColor = (fixedColor & ~0x03E0) | (intensity << 5);
+        }
+        if ((value & 0x80) != 0) {
+            fixedColor = (fixedColor & ~0x7C00) | (intensity << 10);
+        }
     }
 
     /** $2134-$2136 MPY: signed 16-bit M7A times signed 8-bit high byte of M7B, 24-bit result. */

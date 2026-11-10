@@ -183,6 +183,38 @@ class SnesTest {
         assertTrue(elapsed >= 8L * data.length + 16, "DMA takes 8 master cycles per byte plus setup");
     }
 
+    @Test
+    void hdmaSendsOneUnitPerTableEntryOrPerLineInRepeatMode() {
+        Snes snes = boot(IDLE_LOOP);
+        SnesBus bus = snes.bus();
+        // Target the WRAM port ($2180), so each HDMA byte lands in work RAM, starting at $10000.
+        bus.writeA(0x002181, 0x00);
+        bus.writeA(0x002182, 0x00);
+        bus.writeA(0x002183, 0x01);
+        int[] table = {
+            0x01, 0x11,         // 1 line: send $11
+            0x82, 0x22, 0x33,   // repeat mode, 2 lines: send $22, then $33
+            0x00,               // end of table
+        };
+        for (int i = 0; i < table.length; i++) {
+            snes.wram().write(0x0100 + i, table[i]);
+        }
+        bus.writeA(0x004300, 0x00);   // pattern 0: one register
+        bus.writeA(0x004301, 0x80);   // B-bus $2180
+        bus.writeA(0x004302, 0x00);   // table at $7E:0100
+        bus.writeA(0x004303, 0x01);
+        bus.writeA(0x004304, 0x7E);
+        bus.writeA(0x00420C, 0x01);   // enable HDMA on channel 0
+
+        snes.runFrame();   // power-on frame: HDMA starts from the next frame's line 0
+        snes.runFrame();
+
+        assertEquals(0x11, snes.wram().read(0x10000));
+        assertEquals(0x22, snes.wram().read(0x10001));
+        assertEquals(0x33, snes.wram().read(0x10002));
+        assertEquals(0x00, snes.wram().read(0x10003), "the table ended");
+    }
+
     // ---- Helpers ------------------------------------------------------------------------------
 
     private static Snes boot(int[] program) {
