@@ -13,7 +13,8 @@ Last updated: 2026-11-10, after Milestone 7.
 | - | Scroll jitter fix, focus-independent keyboard | `c854205` | done |
 | 5 | Battery saves (.srm), gamepad via winmm/FFM | `4278371` | done |
 | 6 | HDMA, windows, color math, Mode 7, mosaic | `42fead7` | done |
-| 7 | SPC700 (256k tests pass), DSP, sound output | `aa19df1` | done; the user is listening ("so far so good") |
+| 7 | SPC700 (256k tests pass), DSP, sound output | `aa19df1` | done; the user confirmed audio "seems great" |
+| - | BG line numbering (+1) and render at dot 22 (Super Metroid HUD) | see git log | done |
 | 8 | Debug and state-viewer tools | - | **next** |
 | later | Move video and input to LWJGL; CRT/NTSC shaders | - | planned |
 
@@ -22,7 +23,10 @@ Last updated: 2026-11-10, after Milestone 7.
 - SMW: plays well (keyboard and gamepad). Jitter fixed. Saves work at SMW's save points.
 - Super Metroid: plays well in the first minutes.
 - Gamepad: all buttons map correctly with the defaults.
-- Audio: being tested, positive so far.
+- Audio: sounds great.
+- A minor HUD glitch in Super Metroid (the minimap's last line phasing in and out) was fixed by
+  the BG line-numbering and render-timing changes. The user said per-pixel accuracy isn't worth
+  chasing for glitches like this: make a moderate, scanline-level effort.
 
 ## Known simplifications and gaps
 
@@ -37,7 +41,8 @@ Each is documented where it lives in the code.
 - The PPU1/PPU2 open bus isn't modeled; write-only PPU registers read as CPU open bus.
 
 **PPU**
-- Scanline renderer: mid-line register writes (outside HDMA) only take effect on the next line.
+- Scanline renderer (lines drawn at dot 22): writes during the visible part of a line only
+  take effect on the next line. Writes in horizontal blank are handled correctly.
 - Not implemented: hi-res modes 5/6 and pseudo-hi-res, interlace, offset-per-tile (modes
   2/4/6), direct color, and the sprite interlace and range quirks of X=-256.
 - Mosaic's vertical counter is based on the frame top, not on when the register was written.
@@ -58,6 +63,9 @@ Each is documented where it lives in the code.
 The user's stated goal after the emulator works: tools for viewing system state, for
 educational value. Hooks that already exist:
 - `Cpu.setInstructionListener(Registers)`: tracing, breakpoints, PC histograms.
+- `SnesBus.setRegisterWriteListener((address, value) -> ...)`: every hardware register write
+  from the CPU, DMA or HDMA. Combine it with `clock().v()/dot()` for a beam-position log; that's
+  how the Super Metroid HUD split was diagnosed.
 - `Ppu.peekVram/peekCgram/peekOam`, package-private layer state, `bgMode()`.
 - `Snes` accessors: `cpu()`, `bus()`, `clock()`, `ppu()`, `wram()`, `joypads()`,
   `cartridge()`, `apu()`; `Apu.cpu()` exposes the SPC700 registers.

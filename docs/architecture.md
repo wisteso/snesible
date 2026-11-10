@@ -42,7 +42,10 @@ piece in detail.
 
 ### Per-line events (in `Snes`)
 - `onLineStart(0)`: HDMA tables restart (`DmaController.initHdma()`).
-- `onLineStart(n)`: the PPU draws **picture line n-1** (beam line 0 is never shown).
+- `onBeamMoved` at **dot 22** (h = 88, `Ppu.FIRST_VISIBLE_DOT`) on beam lines 1..visible: the
+  PPU draws **picture line n-1** (beam line 0 is never shown). Drawing at the first visible dot
+  rather than at h = 0 means writes made in the early horizontal blank (dots 0-21) apply to
+  the line, as on hardware.
 - `onLineStart(vblankStart)` (225, or 240 with overscan): NMI flag/NMI, auto joypad read,
   OAM address reload, `frameComplete`, so `runFrame()` returns at the start of vblank.
 - `onBeamMoved` at h = 1104 on lines 0..vblankStart-1: one line of HDMA. Its register writes
@@ -50,9 +53,9 @@ piece in detail.
 - `InterruptControl.onBeamMoved` fires H/V timer IRQs.
 
 ### Scanline renderer consequence
-A whole picture line is drawn at the start of its beam line, from the registers at that moment.
-CPU writes in the middle of a line show up on the next line. HDMA is unaffected (it runs in
-hblank, before the render).
+A whole picture line is drawn at its first visible dot, from the registers at that moment.
+CPU writes during the visible part of a line show up on the next line. Writes in horizontal
+blank (HDMA at dot ~276, and IRQ handlers finishing around dot 0-21) land correctly.
 
 ## APU synchronization (catch-up)
 

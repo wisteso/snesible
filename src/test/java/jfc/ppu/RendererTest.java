@@ -53,6 +53,22 @@ class RendererTest {
     }
 
     @Test
+    void topPictureLineShowsBackgroundRowOneAtZeroScroll() {
+        mode0WithBg1Tile(0x0001);         // tile 1 has its pixel in row 1
+        ppu.vram[1 * 8] = 0x0000;
+
+        renderLine(0);
+        assertEquals(RGB_RED, pixel(0, 0), "beam line 1 shows map row 1");
+
+        ppu.vram[1 * 8 + 1] = 0x0000;     // move the pixel to row 0 ...
+        ppu.vram[1 * 8] = 0x0080;
+        ppu.write(0x0E, 0xFF);            // ... and scroll up by one (BG1VOFS = -1)
+        ppu.write(0x0E, 0x03);
+        renderLine(0);
+        assertEquals(RGB_RED, pixel(0, 0), "a scroll of -1 brings map row 0 to the top");
+    }
+
+    @Test
     void horizontalScrollKeepsAllEightBitsOfTheFirstWrite() {
         mode0WithBg1Tile(0x0001);
         ppu.write(0x0D, 0x07);          // BG1HOFS = 7: the low byte has bit 2 set
@@ -165,7 +181,7 @@ class RendererTest {
         ppu.write(0x05, 0x00);          // BGMODE 0
         ppu.write(0x07, 0x04);          // BG1 tilemap at word $0400, 32x32
         ppu.write(0x0B, 0x00);          // BG1 tiles at word $0000
-        ppu.vram[1 * 8] = 0x0080;       // tile 1 (2bpp, 8 words): plane 0, leftmost pixel
+        ppu.vram[1 * 8 + 1] = 0x0080;   // tile 1 (2bpp, 8 words), row 1, plane 0, leftmost pixel
         ppu.vram[0x0400] = tilemapEntry;
         ppu.write(0x2C, 0x01);          // main screen: BG1
     }
@@ -175,7 +191,7 @@ class RendererTest {
         setColor(129, GREEN);
         ppu.write(0x05, 0x01);          // BGMODE 1: BG1 is 4bpp
         ppu.write(0x07, 0x04);
-        ppu.vram[1 * 16] = 0x0080;      // BG tile 1 (4bpp)
+        ppu.vram[1 * 16 + 1] = 0x0080;  // BG tile 1 (4bpp), row 1
         ppu.vram[0x0400] = 0x2001;      // tile 1, priority bit set
         ppu.write(0x01, 0x02);          // sprite tiles at word $4000
         ppu.vram[0x4000 + 2 * 16] = 0x0080;
@@ -213,7 +229,7 @@ class RendererTest {
     }
 
     private void renderLine(int y) {
-        ppu.onLineStart(y + 1);         // picture line y is drawn as the beam starts line y+1
+        ppu.renderLine(y);
     }
 
     private int pixel(int x, int y) {

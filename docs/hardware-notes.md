@@ -35,6 +35,16 @@ the test suites or by tracing real games. Before "fixing" behavior listed here, 
 
 ## PPU
 
+- **Background line numbering**: backgrounds (including Mode 7) use the *beam* line number,
+  and the first visible line is beam line 1. So at vertical scroll 0, picture line 0 shows map
+  row **1** (`BackgroundLayer`: `screenY + 1 + vScroll`). Sprites don't share this offset.
+  Without it Super Metroid's HUD was one line low, and the minimap's bottom dotted row
+  (picture line 30) fell onto the split line. Verified against a Snes9x screenshot: dotted rows
+  at picture lines 6, 14, 22, 30; gameplay from 31.
+- **When a line is drawn**: pixels start around dot 22. Register writes before that (late
+  horizontal blank) affect the whole line. Super Metroid's HUD IRQ (H+V at line 31, dot 152)
+  writes TM at line 31 dot ~337 in some frames and at line 32 dot 2-3 in others. Rendering at
+  dot 0 made line 31 flicker between HUD and gameplay; rendering at dot 22 makes it stable.
 - **Scroll registers** (`$210D-$2114`) use two latches: PPU1's (updated by every scroll write)
   and PPU2's (horizontal writes only). `hScroll = new<<8 | (ppu1Latch & ~7) | (ppu2Latch & 7)`.
   **Don't mask to 10 bits before latching**: that dropped bit 2 and made SMW's layers jitter by

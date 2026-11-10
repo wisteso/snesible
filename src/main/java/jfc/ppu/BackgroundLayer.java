@@ -55,7 +55,10 @@ final class BackgroundLayer {
         int tileSize = bigTiles ? 16 : 8;
         int mapWidthPixels = tilemapWidthTiles * tileSize;
         int mapHeightPixels = tilemapHeightTiles * tileSize;
-        int y = (screenY + vScroll) & (mapHeightPixels - 1);
+        // The PPU uses the beam's line number, and the first visible line is beam line 1. So with
+        // a vertical scroll of 0, the top of the picture shows the map's row 1, not row 0. Games
+        // allow for this (many scroll by -1), and Super Metroid's HUD is one line off without it.
+        int y = (screenY + 1 + vScroll) & (mapHeightPixels - 1);
         int colorsPerPalette = 1 << bitsPerPixel;
 
         for (int screenX = 0; screenX < LayerLine.WIDTH; screenX++) {

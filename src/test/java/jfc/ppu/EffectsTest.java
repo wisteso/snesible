@@ -115,7 +115,7 @@ class EffectsTest {
     @Test
     void mode7WithTheIdentityMatrixShowsTheMapUnchanged() {
         ppu.vram[0] = 0x0001;            // map entry (0,0), low byte: tile 1
-        ppu.vram[64] = 0x0500;           // tile 1 pixel (0,0), high byte: color 5
+        ppu.vram[64 + 8] = 0x0500;       // tile 1 pixel (0,1), high byte: color 5
         setColor(5, rgb15(0, 31, 0));
         ppu.write(0x05, 0x07);           // mode 7
         writeMode7(0x1B, 0x0100);        // A = 1.0
@@ -131,7 +131,7 @@ class EffectsTest {
     @Test
     void mode7ScaleOfTwoStretchesPixels() {
         ppu.vram[0] = 0x0001;
-        ppu.vram[64] = 0x0500;
+        ppu.vram[64] = 0x0500;           // pixel (0,0): at half scale, beam line 1 is map row 0
         setColor(5, rgb15(0, 31, 0));
         ppu.write(0x05, 0x07);
         writeMode7(0x1B, 0x0080);        // A = 0.5: each map pixel covers two screen pixels
@@ -151,7 +151,7 @@ class EffectsTest {
         setColor(1, rgb15(31, 0, 0));
         ppu.write(0x05, 0x00);
         ppu.write(0x07, 0x04);           // BG1 tilemap at $0400, tile data at $0000
-        ppu.vram[0] = 0x0080;            // tile 0: only its leftmost pixel is color 1
+        ppu.vram[1] = 0x0080;            // tile 0 row 1: only its leftmost pixel is color 1
         ppu.write(0x2C, 0x01);
         ppu.write(0x06, 0x31);           // 4x4 mosaic on BG1
 
@@ -167,7 +167,7 @@ class EffectsTest {
     private void fillBg1LineWithColor1() {
         ppu.write(0x05, 0x00);
         ppu.write(0x07, 0x04);           // tilemap at $0400 (all zero: tile 0)
-        ppu.vram[0] = 0x00FF;            // tile 0 row 0: all eight pixels color 1
+        ppu.vram[1] = 0x00FF;            // tile 0 row 1: all eight pixels color 1
         ppu.write(0x2C, 0x01);
     }
 
@@ -196,7 +196,7 @@ class EffectsTest {
     }
 
     private void renderLine(int y) {
-        ppu.onLineStart(y + 1);
+        ppu.renderLine(y);
     }
 
     private int pixel(int x) {
