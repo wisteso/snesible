@@ -1,0 +1,16 @@
+# Game ROMs and battery saves are the user's own and never committed
+roms/
+*.sfc
+*.smc
+*.srm
+
+# Downloaded CPU test suites (large, fetched on demand)
+testdata/
+
+# Build output
+target/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
