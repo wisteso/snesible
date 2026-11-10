@@ -4,8 +4,8 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.KeyboardFocusManager;
 import java.awt.RenderingHints;
-import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -35,6 +35,17 @@ import jfc.system.Snes;
  * Shift or Backspace = Select, Escape = quit.
  */
 public final class EmulatorWindow {
+
+    /** Printed when the window opens, so the key mapping is easy to find. */
+    public static final String CONTROLS_HELP = """
+            Controls:
+              D-pad         Arrow keys
+              A / B         X / Z
+              X / Y         S / A
+              L / R         Q / W
+              Start         Enter
+              Select        Shift or Backspace
+              Quit          Escape""";
 
     private static final int SCALE = 3;
     private static final double NTSC_FRAMES_PER_SECOND = 21_477_272.0 / (1364 * 262);
@@ -93,28 +104,29 @@ public final class EmulatorWindow {
                 running = false;
             }
         });
-        frame.addKeyListener(new KeyAdapter() {
-            @Override
-            public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
-                    frame.dispose();
-                    return;
-                }
-                Integer button = KEY_BINDINGS.get(e.getKeyCode());
-                if (button != null) {
-                    heldButtons.updateAndGet(held -> held | button);
-                }
-            }
-
-            @Override
-            public void keyReleased(KeyEvent e) {
-                Integer button = KEY_BINDINGS.get(e.getKeyCode());
-                if (button != null) {
-                    heldButtons.updateAndGet(held -> held & ~button);
-                }
-            }
-        });
+        // A KeyListener only hears keys while its own component has keyboard focus, and inside
+        // a JFrame that's usually a child component, not the frame. A dispatcher registered
+        // with the focus manager sees every key event in the application instead.
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(this::handleKey);
         frame.setVisible(true);
+    }
+
+    /** Turns key presses and releases into controller buttons. */
+    private boolean handleKey(KeyEvent e) {
+        if (e.getID() == KeyEvent.KEY_PRESSED && e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+            frame.dispose();
+            return true;
+        }
+        Integer button = KEY_BINDINGS.get(e.getKeyCode());
+        if (button == null) {
+            return false; // not ours: let Swing handle it normally
+        }
+        if (e.getID() == KeyEvent.KEY_PRESSED) {
+            heldButtons.updateAndGet(held -> held | button);
+        } else if (e.getID() == KeyEvent.KEY_RELEASED) {
+            heldButtons.updateAndGet(held -> held & ~button);
+        }
+        return true;
     }
 
     /**

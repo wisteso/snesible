@@ -60,8 +60,13 @@ public final class Ppu {
     final BackgroundLayer[] backgrounds = {
         new BackgroundLayer(0), new BackgroundLayer(1), new BackgroundLayer(2), new BackgroundLayer(3),
     };
-    /** The shared latch for the write-twice scroll registers ($210D-$2114). */
-    private int scrollLatch;
+    /**
+     * Latches for the write-twice scroll registers ($210D-$2114). The scroll registers are
+     * split across both PPU chips, and each chip keeps its own copy of the previous byte
+     * written: PPU1's is updated by every scroll write, PPU2's only by horizontal ones.
+     */
+    private int scrollLatchPpu1;
+    private int scrollLatchPpu2;
 
     // ---- $212C TM / $212D TS: which layers are drawn on the main and sub screens
     /** Bits 0-3 = BG1-BG4, bit 4 = sprites. */
@@ -283,18 +288,25 @@ public final class Ppu {
     }
 
     /**
-     * Horizontal scroll is 10 bits, written as two bytes to one address. The registers for all
-     * four BGs share one latch, and the low 3 bits are mixed oddly: they come from the previous
-     * write, but only bits above them are taken from it. The formula is from hardware tests.
+     * Scroll registers are written twice, low byte first: each write combines the new byte
+     * (as the high byte) with the previously written byte (as the low byte). For horizontal
+     * scroll, the low 3 bits come from PPU2's latch and the rest from PPU1's. In the normal
+     * low-then-high sequence both latches hold the same byte, so the result is simply
+     * {@code high << 8 | low}. The split only shows when a game interleaves writes to
+     * different scroll registers.
+     *
+     * <p>Only the low 10 bits are used, but the latches must keep all 8 bits of each byte:
+     * masking too early drops bits of the low byte before the second write arrives.
      */
     private void writeHorizontalScroll(BackgroundLayer bg, int value) {
-        bg.hScroll = ((value << 8) | (scrollLatch & ~7) | ((bg.hScroll >> 8) & 7)) & 0x3FF;
-        scrollLatch = value;
+        bg.hScroll = ((value << 8) | (scrollLatchPpu1 & ~7) | (scrollLatchPpu2 & 7)) & 0x3FF;
+        scrollLatchPpu1 = value;
+        scrollLatchPpu2 = value;
     }
 
     private void writeVerticalScroll(BackgroundLayer bg, int value) {
-        bg.vScroll = ((value << 8) | scrollLatch) & 0x3FF;
-        scrollLatch = value;
+        bg.vScroll = ((value << 8) | scrollLatchPpu1) & 0x3FF;
+        scrollLatchPpu1 = value;
     }
 
     // =============================================================================================
