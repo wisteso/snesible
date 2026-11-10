@@ -15,6 +15,24 @@ java -jar target/jfc-0.1.0-SNAPSHOT.jar "roms/Super Mario World.sfc"
 Keys: arrows = D-pad, X = A, Z = B, S = X, A = Y, Q = L, W = R, Enter = Start,
 Shift/Backspace = Select, Escape = quit.
 
+Gamepads (Windows only for now): the first pad plays as controller 1 alongside the keyboard,
+a second as controller 2. If the face buttons are mixed up, run `--gamepad-test`, press each
+button to see its number, and put the numbers in a `gamepad.properties` file in the working
+directory:
+
+```properties
+A=0
+B=1
+X=2
+Y=3
+L=4
+R=5
+SELECT=6
+START=7
+```
+
+Games with battery-backed saves keep them in a `.srm` file next to the ROM.
+
 Other modes:
 
 ```bash
@@ -60,6 +78,7 @@ mvn test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
 | `jfc.apu`       | Audio unit ports; a handshake stub until Milestone 7                   |
 | `jfc.system`    | The console: master clock, work RAM, and wiring it all together       |
 | `jfc.ui`        | Swing window, frame pacing and keyboard input                        |
+| `jfc.ui.input`  | Gamepads (winmm.dll through Java's Foreign Function API)             |
 
 ## Roadmap
 
@@ -67,7 +86,9 @@ mvn test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
 2. ~~65816 CPU core, verified against the SingleStepTests suite~~
 3. ~~Bus, DMA, interrupts, APU handshake stub~~
 4. ~~PPU: backgrounds and sprites, plus a window with keyboard input~~
-5. Battery saves (SRAM), input polish
+5. ~~Battery saves (SRAM), gamepad input~~
 6. PPU: windows, color math, HDMA, Mode 7
 7. Real APU: SPC700 and DSP audio
 8. Debug and state-viewer tools
+
+Later: move video and input to LWJGL, for cross-platform gamepads and CRT/NTSC shaders.

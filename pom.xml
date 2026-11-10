@@ -53,6 +53,10 @@
                         <manifest>
                             <mainClass>jfc.Main</mainClass>
                         </manifest>
+                        <manifestEntries>
+                            <!-- Gamepad input calls winmm.dll through the Foreign Function API -->
+                            <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+                        </manifestEntries>
                     </archive>
                 </configuration>
             </plugin>

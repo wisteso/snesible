@@ -149,6 +149,15 @@ public record CartridgeHeader(
         return (cartridgeTypeByte & 0x0F) >= 0x03;
     }
 
+    /**
+     * True when the cartridge has a battery keeping its SRAM alive with the power off, i.e. the
+     * game can save. Cartridges without one use SRAM only as scratch memory.
+     */
+    public boolean hasBattery() {
+        int memories = cartridgeTypeByte & 0x0F;
+        return memories == 0x02 || memories == 0x05 || memories == 0x06;
+    }
+
     static int readByte(byte[] data, int offset) {
         return data[offset] & 0xFF;
     }

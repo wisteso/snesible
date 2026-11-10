@@ -4,6 +4,9 @@ roms/
 *.smc
 *.srm
 
+# Per-machine gamepad button mapping
+gamepad.properties
+
 # Downloaded CPU test suites (large, fetched on demand)
 testdata/
 

@@ -41,8 +41,21 @@ public final class JoypadPorts {
     /** $4218-$421F: JOY1-JOY4 results of the automatic read (ports 3 and 4 need a multitap). */
     private final int[] autoReadResults = new int[4];
 
-    /** Updates the buttons held on controller {@code port} (0 or 1). */
+    /**
+     * Updates the buttons held on controller {@code port} (0 or 1).
+     *
+     * <p>A real D-pad is a rocker: it physically can't press left and right (or up and down) at
+     * once. A keyboard can, and games were never tested against it. Some glitch badly
+     * (speedrunners exploit it in A Link to the Past), so opposite directions held together
+     * cancel out here.
+     */
     public void setPressed(int port, int buttons) {
+        if ((buttons & (BUTTON_LEFT | BUTTON_RIGHT)) == (BUTTON_LEFT | BUTTON_RIGHT)) {
+            buttons &= ~(BUTTON_LEFT | BUTTON_RIGHT);
+        }
+        if ((buttons & (BUTTON_UP | BUTTON_DOWN)) == (BUTTON_UP | BUTTON_DOWN)) {
+            buttons &= ~(BUTTON_UP | BUTTON_DOWN);
+        }
         pressed[port] = buttons & 0xFFF0;
     }
 
