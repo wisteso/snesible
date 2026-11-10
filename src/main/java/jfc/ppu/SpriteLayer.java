@@ -73,13 +73,17 @@ final class SpriteLayer {
     /** Collects up to 32 sprites that touch {@code screenY}, in priority order. */
     private int findSpritesOnLine(Ppu ppu, int screenY) {
         // Normally sprite 0 has the highest priority. With priority rotation enabled, the
-        // sprite at the OAM address does, and the order wraps around from there.
+        // sprite at the OAM address does, and the order wraps around from there. (The address
+        // counts bytes and each sprite has 4, so dividing by 4 gives the sprite number.)
         int first = ppu.objectPriorityRotation ? (ppu.oamReloadAddress >> 2) & 0x7F : 0;
         int count = 0;
         for (int i = 0; i < 128; i++) {
             int sprite = (first + i) & 0x7F;
             int height = height(ppu, sprite);
             int width = width(ppu, sprite);
+            // Which row of the sprite falls on this line. Y is 8 bits and wraps, so the
+            // subtraction is done modulo 256: a sprite at Y=250 that is 16 pixels tall shows its
+            // rows 6-15 on lines 0-9. A row of 256-height or more means "not on this line".
             int row = (screenY - ppu.oam[sprite * 4 + 1]) & 0xFF;
             int x = x(ppu, sprite);
             boolean onLine = row < height;

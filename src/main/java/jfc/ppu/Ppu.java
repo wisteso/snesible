@@ -226,6 +226,9 @@ public final class Ppu {
                 brightness = value & 0x0F;
             }
             case 0x01 -> writeObjectSelect(value);
+            // OAMADDL/H set a 9-bit *word* address: $2102 its low 8 bits, $2103 bit 0 its top bit.
+            // We keep a byte address, so the word address is shifted left one place. Bit 9 of
+            // the byte address is the top bit; bits 1-8 come from $2102; bit 0 starts at zero.
             case 0x02 -> setOamAddress((oamReloadAddress & 0x200) | (value << 1));
             case 0x03 -> {
                 setOamAddress(((value & 1) << 9) | (oamReloadAddress & 0x1FE));

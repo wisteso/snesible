@@ -693,12 +693,19 @@ public final class Spc700 {
             idle();
         }
         int dividend = ya();
+        // H and V come from comparing the dividend's high byte (Y) with the divisor before
+        // dividing: V means the quotient won't fit in 8 bits (Y >= X implies YA/X >= 256).
         halfCarry = (y & 0x0F) >= (x & 0x0F);
         overflow = y >= x;
         if (y < (x << 1)) {
+            // Quotient below 512: it fits the divider's 9 bits, so the result is the true one
+            // (A gets the low 8 bits; V already holds the ninth).
             a = (dividend / x) & 0xFF;
             y = (dividend % x) & 0xFF;
         } else {
+            // Quotient too big for 9 bits: the shift-and-subtract circuit goes off the rails.
+            // This closed form of what it ends up computing is from hardware testing (it also
+            // handles X = 0 without dividing by zero, since then 256 - X is 256).
             a = (255 - (dividend - (x << 9)) / (256 - x)) & 0xFF;
             y = (x + (dividend - (x << 9)) % (256 - x)) & 0xFF;
         }
