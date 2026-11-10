@@ -70,8 +70,20 @@ public final class Cpu {
     /** Set by STP: the CPU halts until reset. */
     private boolean stopped;
 
+    /** Notified before each instruction runs (for tracing and debugging tools). */
+    public interface InstructionListener {
+        void beforeInstruction(Registers registers);
+    }
+
+    private InstructionListener instructionListener;
+
     public Cpu(CpuBus bus) {
         this.bus = bus;
+    }
+
+    /** Installs (or, with null, removes) a listener called before every instruction. */
+    public void setInstructionListener(InstructionListener listener) {
+        this.instructionListener = listener;
     }
 
     /** Direct access to the registers, for tests and debugging tools. */
@@ -155,6 +167,9 @@ public final class Cpu {
         if (irqLineAsserted && !p.irqDisable) {
             hardwareInterrupt(VECTOR_NATIVE_IRQ, VECTOR_EMULATION_IRQ_BRK);
             return;
+        }
+        if (instructionListener != null) {
+            instructionListener.beforeInstruction(r);
         }
         execute(fetchByte());
     }
