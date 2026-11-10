@@ -1,7 +1,6 @@
 package jfc.system;
 
-import jfc.apu.ApuHandshakeStub;
-import jfc.apu.ApuPorts;
+import jfc.apu.Apu;
 import jfc.bus.SnesBus;
 import jfc.cartridge.Cartridge;
 import jfc.cpu.Cpu;
@@ -34,7 +33,7 @@ public final class Snes implements MasterClock.Listener {
     private final MasterClock clock;
     private final WorkRam wram = new WorkRam();
     private final Ppu ppu;
-    private final ApuPorts apu = new ApuHandshakeStub();
+    private final Apu apu;
     private final ArithmeticUnit math = new ArithmeticUnit();
     private final JoypadPorts joypads = new JoypadPorts();
     private final DmaController dma;
@@ -51,6 +50,7 @@ public final class Snes implements MasterClock.Listener {
         this.clock = new MasterClock(pal);
         this.ppu = new Ppu(clock, pal);
         this.dma = new DmaController(clock);
+        this.apu = new Apu(clock, pal);
         this.interrupts = new InterruptControl(clock, ppu);
         this.bus = new SnesBus(clock, wram, cartridge, ppu, apu, interrupts, math, joypads, dma);
         this.cpu = new Cpu(bus);
@@ -61,17 +61,25 @@ public final class Snes implements MasterClock.Listener {
         clock.setListener(this);
     }
 
-    /** Presses the reset button: the CPU restarts from the cartridge's RESET vector. */
+    /**
+     * Presses the reset button: the CPU restarts from the cartridge's RESET vector, and the
+     * APU from its boot ROM, ready to receive the game's sound driver again.
+     */
     public void reset() {
+        apu.reset();
         cpu.reset();
     }
 
-    /** Runs until the start of the next vertical blank, i.e. one complete picture. */
+    /**
+     * Runs until the start of the next vertical blank, i.e. one complete picture. The APU is
+     * then brought up to date, so a frame's worth of audio is ready to collect.
+     */
     public void runFrame() {
         frameComplete = false;
         while (!frameComplete) {
             cpu.step();
         }
+        apu.catchUp();
     }
 
     /** HDMA runs at about dot 276, just after the visible part of each line ends. */
@@ -134,5 +142,9 @@ public final class Snes implements MasterClock.Listener {
 
     public Cartridge cartridge() {
         return cartridge;
+    }
+
+    public Apu apu() {
+        return apu;
     }
 }
