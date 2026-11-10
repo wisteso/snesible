@@ -53,6 +53,18 @@ class RendererTest {
     }
 
     @Test
+    void horizontalScrollKeepsAllEightBitsOfTheFirstWrite() {
+        mode0WithBg1Tile(0x0001);
+        ppu.write(0x0D, 0x07);          // BG1HOFS = 7: the low byte has bit 2 set
+        ppu.write(0x0D, 0x00);
+
+        renderLine(0);
+
+        assertEquals(RGB_RED, pixel(249, 0), "map x=0 appears at screen x=256-7");
+        assertEquals(RGB_BLACK, pixel(253, 0), "not at 256-3, as it would be with bit 2 lost");
+    }
+
+    @Test
     void horizontalFlipMirrorsTheTile() {
         mode0WithBg1Tile(0x4001);       // tile 1 with the h-flip bit
 

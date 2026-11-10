@@ -19,6 +19,7 @@ public final class Main {
     public static void main(String[] args) throws IOException {
         if (args.length == 1 && !args[0].startsWith("--")) {
             Cartridge cart = Cartridge.load(Path.of(args[0]));
+            System.out.println(EmulatorWindow.CONTROLS_HELP);
             new EmulatorWindow(new Snes(cart), cart.header().title()).start();
             return;
         }
