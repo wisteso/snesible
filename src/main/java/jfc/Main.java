@@ -8,6 +8,7 @@ import jfc.cartridge.Cartridge;
 import jfc.cartridge.CartridgeHeader;
 import jfc.cpu.Registers;
 import jfc.system.Snes;
+import jfc.ui.EmulatorWindow;
 
 /** Command-line entry point. */
 public final class Main {
@@ -16,6 +17,11 @@ public final class Main {
     }
 
     public static void main(String[] args) throws IOException {
+        if (args.length == 1 && !args[0].startsWith("--")) {
+            Cartridge cart = Cartridge.load(Path.of(args[0]));
+            new EmulatorWindow(new Snes(cart), cart.header().title()).start();
+            return;
+        }
         if (args.length >= 2 && args[0].equals("--info")) {
             for (int i = 1; i < args.length; i++) {
                 printCartridgeInfo(Path.of(args[i]));
@@ -24,13 +30,24 @@ public final class Main {
         }
         if (args.length >= 2 && args[0].equals("--run")) {
             int frames = args.length >= 3 ? Integer.parseInt(args[2]) : 120;
-            runHeadless(Path.of(args[1]), frames);
+            String[] presses = args.length > 3 ? java.util.Arrays.copyOfRange(args, 3, args.length) : new String[0];
+            runHeadless(Path.of(args[1]), frames, new InputScript(presses));
+            return;
+        }
+        if (args.length >= 4 && args[0].equals("--screenshot")) {
+            String[] presses = java.util.Arrays.copyOfRange(args, 4, args.length);
+            Screenshot.take(Path.of(args[1]), Integer.parseInt(args[2]), Path.of(args[3]), presses);
             return;
         }
         System.err.println("""
                 Usage:
+                  jfc <rom-file>                 Play a game in a window
                   jfc --info <rom-file>...       Print the cartridge header of each ROM
-                  jfc --run <rom-file> [frames]  Run without video and report what the CPU does""");
+                  jfc --run <rom-file> [frames] [BUTTON@frame ...]
+                                                 Run without video and report what the CPU does
+                  jfc --screenshot <rom-file> <frames> <out.png> [BUTTON@frame ...]
+                                                 Run headless and save the last frame as a PNG,
+                                                 pressing buttons (e.g. START@200) on the way""");
         System.exit(1);
     }
 
@@ -39,7 +56,7 @@ public final class Main {
      * that a game boots: once it reaches its main loop, the CPU spends each frame in the same
      * few instructions, waiting for the NMI.
      */
-    private static void runHeadless(Path path, int frames) throws IOException {
+    private static void runHeadless(Path path, int frames, InputScript input) throws IOException {
         Cartridge cart = Cartridge.load(path);
         Snes snes = new Snes(cart);
         int nmiHandler = cart.header().vectors().nativeNmi();
@@ -59,12 +76,14 @@ public final class Main {
         snes.reset();
         for (int frame = 1; frame <= frames; frame++) {
             pcCounts.clear();
+            snes.joypads().setPressed(0, input.buttonsAt(frame));
             snes.runFrame();
             if (frame % 10 == 0 || frame == frames) {
                 Registers r = snes.cpu().registers();
                 System.out.printf("  frame %4d  PC=%02X:%04X  NMIs=%d  instructions/frame=%d  %s%n",
                         frame, r.pbr, r.pc, nmiCount[0], instructions[0] / frame,
-                        snes.ppu().isForcedBlank() ? "(screen blanked)" : "(screen on)");
+                        snes.ppu().isForcedBlank() ? "(screen blanked)"
+                                : "(screen on, mode " + snes.ppu().bgMode() + ")");
             }
         }
 
