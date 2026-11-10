@@ -58,6 +58,15 @@ public final class SnesBus implements CpuBus, DmaController.Bus {
     private final DmaController dma;
 
     private int openBus;
+
+    /** Notified of every write to a hardware register, from any source (CPU, DMA or HDMA). */
+    public interface RegisterWriteListener {
+        /** @param address $2100-$21FF or $4000-$43FF, in bank $00 terms */
+        void onRegisterWrite(int address, int value);
+    }
+
+    /** For debugging tools: watches register writes. Null when nobody is watching. */
+    private RegisterWriteListener registerWriteListener;
     /** MEMSEL ($420D) bit 0: use 6-cycle access for ROM in banks $80-$FF. */
     private boolean fastRomEnabled;
     /** WRIO ($4201): an output port on the controller connectors, also wired to the H/V latch. */
@@ -127,6 +136,11 @@ public final class SnesBus implements CpuBus, DmaController.Bus {
         return fastRomBank ? FAST_CYCLES : SLOW_CYCLES;
     }
 
+    /** Installs (or, with null, removes) a listener for hardware register writes. */
+    public void setRegisterWriteListener(RegisterWriteListener listener) {
+        this.registerWriteListener = listener;
+    }
+
     /** The last value on the data bus, for open-bus reads. */
     public int openBus() {
         return openBus;
@@ -193,6 +207,9 @@ public final class SnesBus implements CpuBus, DmaController.Bus {
 
     @Override
     public void writeB(int register, int value) {
+        if (registerWriteListener != null) {
+            registerWriteListener.onRegisterWrite(0x2100 | register, value);
+        }
         if (register < 0x40) {
             ppu.write(register, value);
         } else if (register < 0x80) {
@@ -228,6 +245,9 @@ public final class SnesBus implements CpuBus, DmaController.Bus {
     }
 
     private void writeCpuIo(int offset, int value) {
+        if (registerWriteListener != null) {
+            registerWriteListener.onRegisterWrite(offset, value);
+        }
         if (offset >= 0x4300 && offset < 0x4380) {
             dma.write(offset, value);
             return;

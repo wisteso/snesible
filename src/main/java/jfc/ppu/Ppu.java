@@ -189,26 +189,33 @@ public final class Ppu {
         return renderer.frameBuffer();
     }
 
-    /**
-     * Called by the system at the start of every scanline.
-     *
-     * <p>Line 0 is never shown, so picture line {@code n} is drawn while the beam is on line
-     * {@code n + 1}. We draw a whole line at once, at its start, using the registers as they are
-     * at that moment. A game changing registers in the middle of a line would see the change
-     * only on the next line. That's the cost of a scanline renderer, and few games care.
-     */
+    /** Called by the system at the start of every scanline. */
     public void onLineStart(int line) {
         if (line == 0) {
             rangeOver = false;
             timeOver = false;
         }
-        if (line >= 1 && line <= visibleLines()) {
-            renderer.renderLine(line - 1);
-        }
         if (line == vblankStartLine() && !forcedBlank) {
             oamAddress = oamReloadAddress;
         }
     }
+
+    /**
+     * Draws picture line {@code pictureLine} (0 = top) into the frame buffer.
+     *
+     * <p>Beam line 0 is never shown, so picture line {@code n} appears while the beam is on line
+     * {@code n + 1}. The system calls this when the beam reaches that line's first visible dot
+     * ({@link #FIRST_VISIBLE_DOT}). We draw the whole line at once, using the registers as they
+     * are at that moment. Writes made earlier on the line, during horizontal blank, apply to it,
+     * as on hardware. A write during the visible part only shows from the next line, which is
+     * the cost of a scanline renderer.
+     */
+    public void renderLine(int pictureLine) {
+        renderer.renderLine(pictureLine);
+    }
+
+    /** Pixels start appearing around dot 22; before that the beam is still in horizontal blank. */
+    public static final int FIRST_VISIBLE_DOT = 22;
 
     // =============================================================================================
     // CPU-facing registers

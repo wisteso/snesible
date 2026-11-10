@@ -45,7 +45,9 @@ final class Mode7Layer {
         int outsideMode = ppu.mode7Settings >> 6;
         boolean extBg = ppu.isMode7ExtBg();
 
-        int y = flipY ? 255 - screenY : screenY;
+        // Like the other backgrounds, Mode 7 uses the beam's line number (picture line + 1).
+        int beamLine = screenY + 1;
+        int y = flipY ? 255 - beamLine : beamLine;
         int offsetX = clip(scrollX - centerX);
         int offsetY = clip(scrollY - centerY);
         // Map position of screen pixel x=0 on this line, in 8.8 fixed point.
