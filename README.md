@@ -10,7 +10,11 @@ Requires JDK 25 and Maven.
 ```bash
 mvn package
 java -jar target/jfc-0.1.0-SNAPSHOT.jar --info roms/*.sfc
+java -jar target/jfc-0.1.0-SNAPSHOT.jar --run "roms/Super Mario World.sfc" 300
 ```
+
+`--info` prints cartridge headers. `--run` runs a game without video for some frames and reports
+where the CPU spends its time, which is useful for checking that a game boots.
 
 Put your own ROM dumps in `roms/` (git-ignored). Tests in `RealRomTest` run against them when
 present and are skipped otherwise.
@@ -38,14 +42,18 @@ mvn test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
 |-----------------|-----------------------------------------------------------------------|
 | `jfc.cartridge` | Game cartridge: ROM/SRAM, header, LoROM/HiROM address mapping          |
 | `jfc.cpu`       | 65816 CPU core (the heart of the Ricoh 5A22)                          |
-
-More packages (bus, 65816 CPU, DMA, PPU, APU, UI) are added as the emulator grows.
+| `jfc.cpu.io`    | The rest of the 5A22: NMI/IRQ timers, multiply/divide, joypad ports    |
+| `jfc.dma`       | The 5A22's 8-channel DMA controller                                   |
+| `jfc.bus`       | Memory map and per-access timing (A-bus and B-bus)                    |
+| `jfc.ppu`       | Picture processor: VRAM/CGRAM/OAM ports (rendering in Milestone 4)    |
+| `jfc.apu`       | Audio unit ports; a handshake stub until Milestone 7                   |
+| `jfc.system`    | The console: master clock, work RAM, and wiring it all together       |
 
 ## Roadmap
 
 1. ~~Skeleton and cartridge loading~~
 2. ~~65816 CPU core, verified against the SingleStepTests suite~~
-3. Bus, DMA, interrupts, APU handshake stub
+3. ~~Bus, DMA, interrupts, APU handshake stub~~
 4. PPU: backgrounds and sprites
 5. Controller input
 6. PPU: windows, color math, HDMA, Mode 7

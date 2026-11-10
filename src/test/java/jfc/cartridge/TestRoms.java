@@ -3,7 +3,7 @@ package jfc.cartridge;
 import java.nio.charset.StandardCharsets;
 
 /** Builds small synthetic ROM images with valid headers, so tests don't depend on real games. */
-final class TestRoms {
+public final class TestRoms {
 
     private TestRoms() {
     }
@@ -12,7 +12,7 @@ final class TestRoms {
      * Creates a ROM whose every byte encodes its own offset (handy for checking address mapping),
      * with a valid header at the position {@code mapMode} expects.
      */
-    static byte[] build(MapMode mapMode, int romSize, int sramSizeByte, int resetVector) {
+    public static byte[] build(MapMode mapMode, int romSize, int sramSizeByte, int resetVector) {
         byte[] rom = new byte[romSize];
         for (int i = 0; i < romSize; i++) {
             rom[i] = (byte) (i ^ (i >>> 8) ^ (i >>> 16));
@@ -54,7 +54,7 @@ final class TestRoms {
     }
 
     /** The value {@link #build} stored at ROM offset {@code i} (ignoring the header area). */
-    static int expectedByte(int i) {
+    public static int expectedByte(int i) {
         return (i ^ (i >>> 8) ^ (i >>> 16)) & 0xFF;
     }
 }
