@@ -15,7 +15,8 @@ Last updated: 2026-11-11, Milestone 8 (SuperFX and SA-1).
 | 6 | HDMA, windows, color math, Mode 7, mosaic | `42fead7` | done |
 | 7 | SPC700 (256k tests pass), DSP, sound output | `aa19df1` | done; the user confirmed audio "seems great" |
 | - | BG line numbering (+1) and render at dot 22 (Super Metroid HUD) | see git log | done |
-| 8 | Coprocessors: SuperFX (Star Fox, Yoshi's Island) and SA-1 (Super Mario RPG) | see git log | done headless; **awaiting the user's play test** |
+| 8 | Coprocessors: SuperFX (Star Fox, Yoshi's Island) and SA-1 (Super Mario RPG) | see git log | done; the user played all three ("pretty much perfectly") |
+| - | Offset-per-tile in modes 2 and 4 (Star Fox horizon); GSU background ROM/RAM buffers | see git log | done |
 | 9 | Debug and state-viewer tools (plan below) | - | planned |
 | 10 | Move video and input to LWJGL; CRT/NTSC shaders | - | planned |
 
@@ -44,8 +45,8 @@ Each is documented where it lives in the code.
 **PPU**
 - Scanline renderer (lines drawn at dot 22): writes during the visible part of a line only
   take effect on the next line. Writes in horizontal blank are handled correctly.
-- Not implemented: hi-res modes 5/6 and pseudo-hi-res, interlace, offset-per-tile (modes
-  2/4/6), direct color, and the sprite interlace and range quirks of X=-256.
+- Not implemented: hi-res modes 5/6 and pseudo-hi-res, interlace, offset-per-tile in mode 6
+  (modes 2 and 4 have it), direct color, and the sprite interlace and range quirks of X=-256.
 - Mosaic's vertical counter is based on the frame top, not on when the register was written.
 
 **APU**
@@ -65,8 +66,19 @@ Each is documented where it lives in the code.
 - Fixed after the user spotted it: Yoshi's Island's message box border had see-through holes,
   and its intro storybook text box showed stripes. Both had one cause, which was in the HDMA
   code, not the SuperFX: channels enabled mid-frame never ran (see hardware-notes.md, HDMA).
+- The user played all three games in the window: "everything plays pretty much perfectly"
+  except two Star Fox issues:
+  - Fixed: the background's horizon sat lower than the 3D scene's vanishing point. Star Fox
+    uses mode 2 offset-per-tile, which wasn't implemented (see hardware-notes.md, PPU).
+  - Improved, not closed: the "scramble" launch scene after the briefing ran slower than in
+    Snes9x (the user compared; the briefing itself was fine). The GSU's ROM-buffer fetches and
+    RAM writes now run in the background as on the chip, which took the scene from ~8.9 to
+    ~10.4 pictures/s. The user's Snes9x recording shows ~11.8. The user said this is a known
+    hard problem, that Snes9x may run the GSU faster than real hardware, and that ~15 fps is
+    normal for Star Fox, so this is just noted. Details in hardware-notes.md (SuperFX).
+    Comparing against bsnes, or a real-hardware recording, would show which side is off.
 - Simplifications: plotting writes pixels straight to RAM (same result as the pixel cache);
-  ROM/RAM buffer waits are fixed costs; the GSU doesn't stall when it lacks the ROM/RAM bus;
+  a partly filled pixel-cache flush isn't charged its extra read; the GSU doesn't stall when it lacks the ROM/RAM bus;
   only CPU writes mark the battery RAM dirty (the GSU's frame-buffer writes don't).
 
 **SA-1 (Milestone 8, second half; the user asked for it right after the SuperFX)**

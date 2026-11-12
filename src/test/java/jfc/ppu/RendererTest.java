@@ -68,6 +68,63 @@ class RendererTest {
         assertEquals(RGB_RED, pixel(0, 0), "a scroll of -1 brings map row 0 to the top");
     }
 
+    // ---- Offset-per-tile (modes 2 and 4) ------------------------------------------------------
+
+    @Test
+    void offsetPerTileGivesAColumnItsOwnVerticalScroll() {
+        mode2WithSolidBg1Tile();
+        ppu.vram[0x0400 + 4 * 32 + 1] = 0x0001;   // only map row 4 (y 32-39), column 1, is red
+        ppu.vram[0x0400 + 4 * 32 + 2] = 0x0001;
+        ppu.vram[0x0800 + 32] = 0x2000 | 31;      // table row 1 (V), first column: BG1, scroll 31
+
+        renderLine(0);                            // beam line 1 + 31 = map y 32: row 4
+
+        assertEquals(RGB_RED, pixel(8, 0), "screen column 1 uses the table's first entry");
+        assertEquals(RGB_BLACK, pixel(16, 0), "screen column 2 has no entry: register scroll");
+    }
+
+    @Test
+    void offsetPerTileReplacesTheCoarseHorizontalScrollButNotTheLeftmostColumn() {
+        mode2WithSolidBg1Tile();
+        ppu.vram[0x0400 + 10] = 0x0001;           // map column 10 (x 80-87) is red
+        ppu.vram[0x0400] = 0x0001;                // and so is column 0 (x 0-7)
+        ppu.vram[0x0800 + 1] = 0x2000 | 64;       // table row 0 (H), second column: scroll 64
+
+        renderLine(0);
+
+        assertEquals(RGB_RED, pixel(0, 0), "column 0 never uses the table");
+        assertEquals(RGB_RED, pixel(16, 0), "screen x 16 + 64 = map x 80");
+        assertEquals(RGB_RED, pixel(23, 0));
+        assertEquals(RGB_BLACK, pixel(24, 0));
+    }
+
+    @Test
+    void offsetPerTileEntriesOnlyAffectTheLayersTheyName() {
+        mode2WithSolidBg1Tile();
+        ppu.vram[0x0400 + 4 * 32 + 1] = 0x0001;
+        ppu.vram[0x0800 + 32] = 0x4000 | 31;      // bit 14: for BG2, not BG1
+
+        renderLine(0);
+
+        assertEquals(RGB_BLACK, pixel(8, 0));
+    }
+
+    @Test
+    void mode4UsesOneTableRowWithBit15ChoosingVertical() {
+        mode2WithSolidBg1Tile();
+        ppu.write(0x05, 0x04);                    // BGMODE 4: BG1 is 8bpp
+        for (int row = 0; row < 8; row++) {       // redo tile 1 as an 8bpp tile (32 words)
+            ppu.vram[16 + row] = 0x0000;
+            ppu.vram[32 + row] = 0x00FF;
+        }
+        ppu.vram[0x0400 + 4 * 32 + 1] = 0x0001;
+        ppu.vram[0x0800] = 0x8000 | 0x2000 | 31;  // table row 0: vertical, BG1, scroll 31
+
+        renderLine(0);
+
+        assertEquals(RGB_RED, pixel(8, 0));
+    }
+
     @Test
     void horizontalScrollKeepsAllEightBitsOfTheFirstWrite() {
         mode0WithBg1Tile(0x0001);
@@ -183,6 +240,22 @@ class RendererTest {
         ppu.write(0x0B, 0x00);          // BG1 tiles at word $0000
         ppu.vram[1 * 8 + 1] = 0x0080;   // tile 1 (2bpp, 8 words), row 1, plane 0, leftmost pixel
         ppu.vram[0x0400] = tilemapEntry;
+        ppu.write(0x2C, 0x01);          // main screen: BG1
+    }
+
+    /**
+     * Mode 2 with an empty BG1 map at $0400 and tile 1 a solid block of color 1 (red). BG3's map,
+     * the offset-per-tile table, is at $0800 and starts empty. Tests place the red tiles.
+     */
+    private void mode2WithSolidBg1Tile() {
+        setColor(1, RED);
+        ppu.write(0x05, 0x02);          // BGMODE 2: BG1 is 4bpp
+        ppu.write(0x07, 0x04);          // BG1 tilemap at word $0400
+        ppu.write(0x09, 0x08);          // BG3 tilemap (the offset table) at word $0800
+        ppu.write(0x0B, 0x00);          // BG1 tiles at word $0000
+        for (int row = 0; row < 8; row++) {
+            ppu.vram[16 + row] = 0x00FF; // tile 1 (16 words), plane 0 set everywhere: color 1
+        }
         ppu.write(0x2C, 0x01);          // main screen: BG1
     }
 

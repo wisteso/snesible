@@ -32,7 +32,8 @@ import java.util.Arrays;
  *    6    4bpp   -     -     -    hi-res plus offset-per-tile*
  *    7    one rotating/scaling 8bpp layer (see Mode7Layer)
  * </pre>
- * <i>* Offset-per-tile and hi-res aren't implemented yet; those modes draw as plain layers.</i>
+ * <i>* Offset-per-tile works in modes 2 and 4 (see BackgroundLayer). Hi-res isn't implemented
+ * yet, so modes 5 and 6 draw as 256-pixel layers, and mode 6 ignores its offset table.</i>
  */
 final class Renderer {
 
@@ -144,6 +145,9 @@ final class Renderer {
             layers[3].clear();
         } else {
             int[] bitsPerPixel = BITS_PER_PIXEL[ppu.bgMode];
+            // In modes 2 and 4, BG3's map is the offset-per-tile table for BG1 and BG2.
+            boolean offsetPerTile = ppu.bgMode == 2 || ppu.bgMode == 4;
+            BackgroundLayer offsetTable = offsetPerTile ? ppu.backgrounds[2] : null;
             for (int bg = 0; bg < 4; bg++) {
                 boolean used = bitsPerPixel[bg] != 0 && (usedLayers & (1 << bg)) != 0;
                 if (!used) {
@@ -154,7 +158,7 @@ final class Renderer {
                 // Mode 0 gives each background its own 32-color slice of CGRAM.
                 int paletteOffset = ppu.bgMode == 0 ? bg * 32 : 0;
                 ppu.backgrounds[bg].renderLine(ppu.vram, mosaic ? mosaicY : y, bitsPerPixel[bg],
-                        paletteOffset, layers[bg]);
+                        paletteOffset, offsetTable, ppu.bgMode == 4, layers[bg]);
                 if (mosaic) {
                     applyHorizontalMosaic(bg);
                 }
