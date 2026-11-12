@@ -5,7 +5,7 @@ roms/
 *.srm
 
 # Per-machine gamepad button mapping
-gamepad.properties
+#gamepad.properties
 
 # Downloaded CPU test suites (large, fetched on demand)
 testdata/
@@ -17,3 +17,13 @@ target/
 .idea/
 *.iml
 .vscode/
+
+# OS clutter
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# JVM crash dumps and logs
+hs_err_pid*.log
+replay_pid*.log
+*.log
