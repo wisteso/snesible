@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 2026-11-10, after Milestone 7.
+Last updated: 2026-11-11, during Milestone 8 (SuperFX).
 
 ## Milestones
 
@@ -15,8 +15,9 @@ Last updated: 2026-11-10, after Milestone 7.
 | 6 | HDMA, windows, color math, Mode 7, mosaic | `42fead7` | done |
 | 7 | SPC700 (256k tests pass), DSP, sound output | `aa19df1` | done; the user confirmed audio "seems great" |
 | - | BG line numbering (+1) and render at dot 22 (Super Metroid HUD) | see git log | done |
-| 8 | Debug and state-viewer tools | - | **next** |
-| later | Move video and input to LWJGL; CRT/NTSC shaders | - | planned |
+| 8 | SuperFX (GSU) coprocessor: Star Fox (GSU-1), Yoshi's Island (GSU-2) | see git log | done headless; **awaiting the user's play test** |
+| 9 | Debug and state-viewer tools (plan below) | - | planned |
+| 10 | Move video and input to LWJGL; CRT/NTSC shaders | - | planned |
 
 ## What the user has confirmed by playing
 
@@ -55,22 +56,68 @@ Each is documented where it lives in the code.
 
 **Other**
 - Gamepads are Windows-only (winmm) until the LWJGL move.
-- No coprocessor support (SA-1, SuperFX, DSP-1, ...). None of the user's 4 ROMs need it; the user
-  can supply other ROMs if a target needs one.
+- Coprocessors: only the SuperFX. The SA-1 is planned (the user said so); it should plug into
+  `jfc.coprocessor` the same way (see architecture.md). DSP-n, S-DD1 and others aren't planned.
 
-## Ideas for Milestone 8 (debug and state-viewer tools)
+**SuperFX (Milestone 8)**
+- Verified headless: Star Fox reaches the title, controls screen (3D Arwing) and training
+  flight; Yoshi's Island reaches the title, file select and first level, and its message box
+  text (drawn by the GSU in 2bpp) is correct. Both run about 6x real time.
+- **Open issue:** Yoshi's Island's opening storybook shows vertical stripes in the text box at
+  the bottom (BG3 tiles 1A1-1B9, read from VRAM $7D08 onward, hold tilemap-like words from
+  WRAM $11BE-$13FF that `$0F:CB8A` initialises). The CPU code that should later fill those
+  buffers never runs. Whether real hardware shows text there wasn't confirmed. Next step: compare
+  with another emulator, then find which GSU result the intro text code depends on.
+- Simplifications: plotting writes pixels straight to RAM (same result as the pixel cache);
+  ROM/RAM buffer waits are fixed costs; the GSU doesn't stall when it lacks the ROM/RAM bus;
+  only CPU writes mark the battery RAM dirty (the GSU's frame-buffer writes don't).
+
+## Milestone 9 plan: debug and state-viewer tools
 
 The user's stated goal after the emulator works: tools for viewing system state, for
-educational value. Hooks that already exist:
+educational value. This plan was agreed in outline (the user inserted SuperFX as M8 first);
+the open decisions at the bottom still need the user's answer.
+
+**Shape**
+- A tabbed "Debugger" window in a new `jfc.debug` package (Swing), opened with F12. The core
+  only gets small hooks and stays free of Swing and of any dependency on `jfc.debug`.
+- A `DebugController` owns run / pause / step. It uses `Cpu.setInstructionListener`: the
+  listener blocks the emulation thread when a breakpoint hits or a step ends (audio just
+  underruns to silence while paused).
+- Viewers never read live state from the Swing thread. Between frames (or while paused) the
+  emulation thread copies a snapshot of what the open viewers need (VRAM, CGRAM, OAM,
+  registers, ...); views draw from it, refreshing about 10 times a second while running.
+- Viewers use side-effect-free `peek` accessors, so watching never changes what the game does
+  (no VRAM read-buffer or latch side effects).
+
+**Sub-steps (one reviewable commit each)**
+- **9a. Execution control and CPU view.** A table-driven 65816 disassembler (operand size from
+  M/X). Test idea: for every non-branch SingleStepTests case, the disassembled length must
+  equal the PC delta. Register and flag panel, disassembly around PC, pause / run / step
+  instruction / step scanline / step frame, PC breakpoints, read/write watchpoints. A headless
+  `--trace <rom> <frames> <out.txt>` in a common trace format, to diff against other emulators.
+- **9b. Memory and graphics viewers.** Hex viewer for WRAM, VRAM, CGRAM, OAM, ARAM, SRAM, ROM
+  (and SuperFX RAM) with change highlighting; palette viewer; tile viewer (2/4/8bpp, palette
+  choice); tilemap viewer per BG with the scroll viewport drawn on it; OAM table with sprite
+  previews; decoded PPU state (mode, layers, windows, color math, Mode 7 matrix); per-layer
+  main/sub toggles (a small mask in `Renderer`).
+- **9c. Event viewer.** A 341x262 beam-position grid with a dot for every register write, DMA,
+  HDMA, IRQ and NMI, with hover details; a per-channel DMA/HDMA table. Built on
+  `SnesBus.setRegisterWriteListener` (how the Super Metroid HUD split was found).
+- **9d. APU.** SPC700 disassembler (tested the same way), registers, stepping; DSP voice panel
+  (pitch, volume, ADSR/GAIN, envelope, source, KON), level meters, per-voice mute/solo (a small
+  mask in `Dsp`).
+
+**Hooks that already exist**
 - `Cpu.setInstructionListener(Registers)`: tracing, breakpoints, PC histograms.
 - `SnesBus.setRegisterWriteListener((address, value) -> ...)`: every hardware register write
-  from the CPU, DMA or HDMA. Combine it with `clock().v()/dot()` for a beam-position log; that's
-  how the Super Metroid HUD split was diagnosed.
+  from the CPU, DMA or HDMA. Combine it with `clock().v()/dot()` for a beam-position log.
 - `Ppu.peekVram/peekCgram/peekOam`, package-private layer state, `bgMode()`.
 - `Snes` accessors: `cpu()`, `bus()`, `clock()`, `ppu()`, `wram()`, `joypads()`,
   `cartridge()`, `apu()`; `Apu.cpu()` exposes the SPC700 registers.
 
-Candidates: a 65816 disassembler and trace log; CPU and SPC700 register panels; memory viewer
-(WRAM, VRAM, ARAM); tile/tilemap/palette/OAM viewers; per-layer toggles; DSP voice meters;
-an HDMA/DMA activity log; step/pause/frame-advance. Keep tools out of the core packages
-(for example a `jfc.debug` package) and the core free of Swing.
+**Open decisions (ask the user before starting M9)**
+1. One tabbed window (recommended) or one window per tool?
+2. Trace-log format: which emulator will the user diff against?
+3. Order 9a-9d as above, or graphics viewers first?
+4. Keep the tools in Swing after the LWJGL move (recommended), or Dear ImGui via LWJGL?

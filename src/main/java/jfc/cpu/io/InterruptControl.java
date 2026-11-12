@@ -52,6 +52,11 @@ public final class InterruptControl {
     private boolean inVblank;
     private boolean nmiFlag;
     private boolean irqFlag;
+    /**
+     * The cartridge connector's own IRQ line (driven by a coprocessor such as the SuperFX). It's
+     * wired-OR with the timer IRQ: the CPU sees an interrupt while either one is asserted.
+     */
+    private boolean cartridgeIrq;
 
     public InterruptControl(MasterClock clock, Ppu ppu) {
         this.clock = clock;
@@ -155,6 +160,16 @@ public final class InterruptControl {
     /** The IRQ line stays asserted until software acknowledges it by reading $4211. */
     private void setIrqFlag(boolean raised) {
         irqFlag = raised;
-        cpu.setIrqLine(raised);
+        cpu.setIrqLine(irqFlag || cartridgeIrq);
+    }
+
+    /**
+     * Drives the cartridge's IRQ line. The coprocessor that raises it also decides when it's
+     * acknowledged (the SuperFX, for example, when its status register is read), so TIMEUP
+     * ($4211) doesn't clear it.
+     */
+    public void setCartridgeIrq(boolean asserted) {
+        cartridgeIrq = asserted;
+        cpu.setIrqLine(irqFlag || cartridgeIrq);
     }
 }
