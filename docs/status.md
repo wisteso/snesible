@@ -63,11 +63,9 @@ Each is documented where it lives in the code.
 - Verified headless: Star Fox reaches the title, controls screen (3D Arwing) and training
   flight; Yoshi's Island reaches the title, file select and first level, and its message box
   text (drawn by the GSU in 2bpp) is correct. Both run about 6x real time.
-- **Open issue:** Yoshi's Island's opening storybook shows vertical stripes in the text box at
-  the bottom (BG3 tiles 1A1-1B9, read from VRAM $7D08 onward, hold tilemap-like words from
-  WRAM $11BE-$13FF that `$0F:CB8A` initialises). The CPU code that should later fill those
-  buffers never runs. Whether real hardware shows text there wasn't confirmed. Next step: compare
-  with another emulator, then find which GSU result the intro text code depends on.
+- Fixed after the user spotted it: Yoshi's Island's message box border had see-through holes,
+  and its intro storybook text box showed stripes. Both had one cause, which was in the HDMA
+  code, not the SuperFX: channels enabled mid-frame never ran (see hardware-notes.md, HDMA).
 - Simplifications: plotting writes pixels straight to RAM (same result as the pixel cache);
   ROM/RAM buffer waits are fixed costs; the GSU doesn't stall when it lacks the ROM/RAM bus;
   only CPU writes mark the battery RAM dirty (the GSU's frame-buffer writes don't).
