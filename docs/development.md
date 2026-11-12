@@ -22,7 +22,8 @@ failure details.
 
 - `roms/`: the user's own dumps: Super Mario World, A Link to the Past (has a copier
   header), Super Metroid (FastROM), Turtles in Time, plus two SuperFX games: Star Fox (GSU-1,
-  copier header, no extended header) and Yoshi's Island (GSU-2, 2 MiB, battery-backed GSU RAM).
+  copier header, no extended header) and Yoshi's Island (GSU-2, 2 MiB, battery-backed GSU RAM),
+  and Super Mario RPG (SA-1, 4 MiB, 32 KiB battery-backed BW-RAM).
   All LoROM, USA.
   `.srm` save files are written next to the ROMs.
 - `testdata/65816` (512 files) and `testdata/spc700` (256 files): the SingleStepTests suites,
@@ -41,6 +42,7 @@ failure details.
 | `CartridgeTest`, `MirroringTest`, `RealRomTest` | loading, mapping, SRAM saves, real ROM checksums, every ROM's coprocessor supported |
 | `GsuTest` | SuperFX core: hand-assembled programs (delay slot, prefixes, RAM byte order, multiplies, PLOT/RPIX) |
 | `SuperFxTest` | SuperFX board: memory map, registers, bus sharing, catch-up, STOP IRQ, cache window |
+| `Sa1Test` | SA-1 board: Super MMC, BW-RAM and bitmap view, I-RAM sharing, messages/IRQs, vectors, math, DMA, bit reader (tiny SA-1 programs) |
 | `SnesTest` | memory map, access timing, frame length, NMI, V-IRQ, DMA, HDMA incl. mid-frame enable (hand-assembled programs) |
 | `PpuPortsTest`, `RendererTest`, `EffectsTest` | VRAM/CGRAM/OAM ports, layers, sprites, priorities, color math, windows, Mode 7, mosaic |
 | `ApuTest`, `DspTest` | boot ROM upload protocol, timers, voice playback, ENDX, key off |

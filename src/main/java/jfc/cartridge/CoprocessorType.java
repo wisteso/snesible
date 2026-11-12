@@ -11,7 +11,7 @@ public enum CoprocessorType {
     DSP,
     /** The SuperFX / GSU RISC graphics processor (Star Fox, Yoshi's Island). */
     SUPER_FX,
-    /** The SA-1, a faster 65816 with its own memory (Super Mario RPG, Kirby Super Star). Planned. */
+    /** The SA-1, a faster 65816 with its own memory (Super Mario RPG, Kirby Super Star). */
     SA1,
     /** Anything else (S-DD1, OBC1, S-RTC, custom chips). Not emulated. */
     OTHER

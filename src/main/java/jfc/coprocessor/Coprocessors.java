@@ -1,6 +1,7 @@
 package jfc.coprocessor;
 
 import jfc.cartridge.Cartridge;
+import jfc.coprocessor.sa1.Sa1;
 import jfc.coprocessor.superfx.SuperFx;
 
 /** Picks the coprocessor board a cartridge needs, from its header. */
@@ -18,16 +19,16 @@ public final class Coprocessors {
     public static Coprocessor forCartridge(Cartridge cartridge) {
         return switch (cartridge.header().coprocessorType()) {
             case SUPER_FX -> new SuperFx(cartridge);
-            // The SA-1 would slot in here: a second jfc.cpu.Cpu on its own bus.
-            case NONE, DSP, SA1, OTHER -> null;
+            case SA1 -> new Sa1(cartridge);
+            case NONE, DSP, OTHER -> null;
         };
     }
 
     /** True when {@link #forCartridge} has an implementation for this cartridge's chip. */
     public static boolean isSupported(Cartridge cartridge) {
         return switch (cartridge.header().coprocessorType()) {
-            case NONE, SUPER_FX -> true;
-            case DSP, SA1, OTHER -> false;
+            case NONE, SUPER_FX, SA1 -> true;
+            case DSP, OTHER -> false;
         };
     }
 }

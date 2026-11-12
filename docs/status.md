@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 2026-11-11, during Milestone 8 (SuperFX).
+Last updated: 2026-11-11, Milestone 8 (SuperFX and SA-1).
 
 ## Milestones
 
@@ -15,7 +15,7 @@ Last updated: 2026-11-11, during Milestone 8 (SuperFX).
 | 6 | HDMA, windows, color math, Mode 7, mosaic | `42fead7` | done |
 | 7 | SPC700 (256k tests pass), DSP, sound output | `aa19df1` | done; the user confirmed audio "seems great" |
 | - | BG line numbering (+1) and render at dot 22 (Super Metroid HUD) | see git log | done |
-| 8 | SuperFX (GSU) coprocessor: Star Fox (GSU-1), Yoshi's Island (GSU-2) | see git log | done headless; **awaiting the user's play test** |
+| 8 | Coprocessors: SuperFX (Star Fox, Yoshi's Island) and SA-1 (Super Mario RPG) | see git log | done headless; **awaiting the user's play test** |
 | 9 | Debug and state-viewer tools (plan below) | - | planned |
 | 10 | Move video and input to LWJGL; CRT/NTSC shaders | - | planned |
 
@@ -56,8 +56,7 @@ Each is documented where it lives in the code.
 
 **Other**
 - Gamepads are Windows-only (winmm) until the LWJGL move.
-- Coprocessors: only the SuperFX. The SA-1 is planned (the user said so); it should plug into
-  `jfc.coprocessor` the same way (see architecture.md). DSP-n, S-DD1 and others aren't planned.
+- Coprocessors: SuperFX and SA-1. DSP-n, S-DD1 and others aren't planned.
 
 **SuperFX (Milestone 8)**
 - Verified headless: Star Fox reaches the title, controls screen (3D Arwing) and training
@@ -69,6 +68,20 @@ Each is documented where it lives in the code.
 - Simplifications: plotting writes pixels straight to RAM (same result as the pixel cache);
   ROM/RAM buffer waits are fixed costs; the GSU doesn't stall when it lacks the ROM/RAM bus;
   only CPU writes mark the battery RAM dirty (the GSU's frame-buffer writes don't).
+
+**SA-1 (Milestone 8, second half; the user asked for it right after the SuperFX)**
+- Verified headless on Super Mario RPG: Square logo, the full attract demo (garden, Koopa
+  Clown Car, beanstalk, an isometric battle), title, file select, name entry, the opening story,
+  the walk over the bridge into Bowser's Keep and around its hall. Music plays (checked by
+  recording audio). About 5x real time.
+- Not verified: after skipping the intro with Start, the title and file select are silent for
+  about 6 s before the story music starts. Unknown whether the real game does the same.
+- Not implemented (Super Mario RPG doesn't use them in the parts tested; a temporary log
+  showed it only initializes the timer to off and never starts a character-conversion DMA):
+  the SA-1 H/V timer and its IRQ, character-conversion DMA (types 1 and 2), BW-RAM and I-RAM
+  write protection, and ROM/BW-RAM bus-conflict waits.
+- All BW-RAM writes (console or SA-1) mark the save dirty, because the game keeps both work
+  data and saves in BW-RAM. Saves are throttled to one per second by the window.
 
 ## Milestone 9 plan: debug and state-viewer tools
 
