@@ -103,6 +103,28 @@ checked by `GsuTest`/`SuperFxTest` and by Star Fox and Yoshi's Island running.
   Star Fox has no extended header; its board has 32 KiB, which is the default.
 - STOP raises the cartridge IRQ unless CFGR bit 7 is set; reading $3031 acknowledges it.
 
+## SA-1
+
+Sources: register descriptions from memory (Fullsnes/bsnes-style), checked by `Sa1Test` and by
+Super Mario RPG running.
+
+- **Super MMC**: four 1 MiB windows (C/D/E/F at $2220-$2223). The HiROM views ($C0-$FF)
+  always follow the registers; the LoROM views ($00-$3F, $80-$BF) only when the register's
+  bit 7 is set, otherwise they show chunks 0-3. Power-on: chunks 0, 1, 2, 3.
+- The SA-1 starts **held in reset** (CCNT bit 5). The console sets CRV and clears the bit.
+- SA-1 vectors come from registers (CRV/CNV/CIV), never from ROM; the console's NMI/IRQ
+  vectors switch to SNV/SIV when SCNT bits 4/6 are set (Super Mario RPG's header says
+  NMI $0008 / IRQ $000C).
+- I-RAM (2 KiB) is at $3000-$37FF for both CPUs, and also at $0000-$07FF for the SA-1.
+- **Bitmap view** ($60-$6F, or the SA-1's $6000-$7FFF with BMAP bit 7): one pixel per
+  address, 4bpp packs two per byte (low nibble first), 2bpp four per byte (BBF bit 7).
+- **Arithmetic**: MB's high byte ($2254) starts the operation; division is signed / unsigned
+  with a positive remainder; MCNT with bit 1 clears the 40-bit accumulator.
+- **DMA**: for an I-RAM destination, writing DDA's middle byte ($2236) starts it; for BW-RAM,
+  the top byte ($2237).
+- **Variable-length reader**: $225B (address top byte) resets the bit offset; $2258 sets the
+  width and, in manual mode, advances; in auto mode reading $230D advances.
+
 ## Game-specific observations (not bugs)
 
 - **Super Mario World**: the opening "Welcome to Dinosaur Land" message ignores buttons for

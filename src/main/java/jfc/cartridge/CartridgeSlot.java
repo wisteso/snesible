@@ -5,7 +5,7 @@ package jfc.cartridge;
  * work RAM or a console register.
  *
  * <p>On a plain board that's just the {@link Cartridge}'s ROM and SRAM. Boards with a
- * coprocessor (SuperFX, later SA-1) put the chip in charge of the whole space: it adds its own
+ * coprocessor (SuperFX, SA-1) put the chip in charge of the whole space: it adds its own
  * registers, owns the RAM, and sometimes takes the ROM away from the CPU while it works. Those
  * boards implement this interface themselves and the bus talks to them instead.
  */

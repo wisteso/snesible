@@ -17,6 +17,7 @@ piece in detail.
 | `jfc.ppu`       | Picture processor | `Ppu` (registers and memories), `Renderer` (pipeline), `BackgroundLayer`, `SpriteLayer`, `Mode7Layer`, `WindowMasks`, `Tiles`, `LayerLine` |
 | `jfc.apu`       | Audio unit | `Apu` (RAM, I/O, timers, sync), `Spc700`, `Dsp`, `BootRom`, `ApuPorts` |
 | `jfc.coprocessor` | Chips on the cartridge board | `Coprocessor` (interface), `Coprocessors` (factory) |
+| `jfc.coprocessor.sa1` | SA-1 | `Sa1` (board: both address maps, registers, interrupts, DMA, bit reader, catch-up), `SuperMmc` (ROM banking), `Sa1Arithmetic` |
 | `jfc.coprocessor.superfx` | SuperFX / GSU | `SuperFx` (board: both address maps, registers, catch-up), `Gsu` (the RISC core), `PlotUnit` (PLOT/RPIX), `GsuBus` |
 | `jfc.system`    | The console | `Snes` (wiring and frame loop), `MasterClock`, `WorkRam` |
 | `jfc.ui`        | Window, sound, frame pacing, keyboard | `EmulatorWindow`, `AudioOutput` |
@@ -93,9 +94,15 @@ even while the CPU sits in WAI), and at the end of each frame.
 instruction and returns master cycles. While the GSU owns the ROM (SCMR RON), console ROM
 reads return a fixed pattern that makes the interrupt vectors point into work RAM.
 
-**SA-1 (planned)**: a `jfc.coprocessor.sa1` board implementing `Coprocessor`, running a second
-`jfc.cpu.Cpu` on its own `CpuBus` (the 65816 core doesn't care whose bus it's on), with its
-I-RAM, BW-RAM and registers at $2200-$23FF (which `SnesBus` already routes to the cartridge).
+**SA-1**: `Sa1` runs a second, unmodified `jfc.cpu.Cpu` on its own bus (inner class
+`Sa1Side implements CpuBus`, which charges each access to the SA-1's time: 2 master cycles,
+4 for BW-RAM). The SA-1's own vectors are served from its CRV/CNV/CIV registers by that bus;
+the console's NMI/IRQ vectors can be replaced by SNV/SIV the same way on the console side.
+Releasing CCNT's reset bit calls `cpu.reset()`. Catch-up skips straight to the present while
+the SA-1 is held in reset, halted, stopped, or in WAI with no interrupt pending, since only a
+console access (which happens after catch-up returns) can wake it. Because the console fetches
+its own code from cartridge ROM, catch-up runs about once per console instruction, which keeps
+the two CPUs closely interleaved.
 
 ## Rendering pipeline (`Renderer.renderLine`)
 
