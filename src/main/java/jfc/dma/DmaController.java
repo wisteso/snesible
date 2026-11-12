@@ -100,13 +100,26 @@ public final class DmaController {
     /**
      * Restarts the tables of all enabled HDMA channels. Runs at the top of every frame.
      *
+     * <p>Every channel, enabled or not, gets its "finished" state cleared here. That matters for
+     * channels a game enables <i>later</i> in the frame: they then run from whatever their
+     * table address ($43x8-9) and line counter ($43xA) hold, without a table restart. Yoshi's
+     * Island does this: it sets those registers itself and enables HDMA a few lines down (its
+     * message box window comes from such a channel).
+     *
+     * <p>The "transfer on this line" flag is cleared too, and set again (on every channel) only
+     * when at least one channel is enabled at this point, which is when the hardware runs its
+     * setup step. This follows bsnes; it decides whether a channel enabled mid-frame transfers
+     * on its first line or only after its counter runs out.
+     *
      * @return master cycles the CPU is paused for
      */
     public int initHdma() {
         int cycles = 0;
+        boolean setup = hdmaEnabled != 0;
         for (int i = 0; i < channels.length; i++) {
             DmaChannel channel = channels[i];
-            channel.hdmaTerminated = true;
+            channel.hdmaTerminated = false;
+            channel.hdmaDoTransfer = setup;
             if ((hdmaEnabled & (1 << i)) == 0) {
                 continue;
             }

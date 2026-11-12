@@ -54,6 +54,17 @@ the test suites or by tracing real games. Before "fixing" behavior listed here, 
   when the budget runs out, the lowest-index sprites lose tiles. (I'm fairly but not fully sure
   of this; the user was asked to double-check it.)
 - OAM reloads its address at vblank start unless in forced blank.
+
+## HDMA
+
+- **Channels enabled mid-frame run.** At the top of each frame every channel's "finished" flag
+  is cleared, enabled or not, and "transfer this line" is cleared too and then set on all
+  channels if any channel is enabled at that point (bsnes's hdmaReset/hdmaSetup). A channel
+  enabled later then continues from its current $43x8-9 table address and $43xA counter.
+  Yoshi's Island sets those itself and enables HDMA at line 6; its message box window (window
+  2 via indirect HDMA to $2126-$2129) and its intro text box depend on it. Before the fix, the
+  box border had holes (BG1/BG2/sprites weren't masked) and the intro text never appeared.
+  Regression test: `SnesTest.hdmaChannelEnabledMidFrameRunsFromItsCurrentTableAddress`.
 - Color math: no halving when the sub-screen pixel is the backdrop (fixed color) in
   sub-screen mode, or when the main pixel is clipped to black. Only sprite palettes 4-7 take
   part.

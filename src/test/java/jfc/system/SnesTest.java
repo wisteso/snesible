@@ -215,6 +215,40 @@ class SnesTest {
         assertEquals(0x00, snes.wram().read(0x10003), "the table ended");
     }
 
+    @Test
+    void hdmaChannelEnabledMidFrameRunsFromItsCurrentTableAddress() {
+        // Yoshi's Island enables HDMA a few lines into the frame, after setting the channel's
+        // table address ($43x8-9) and line counter ($43xA) itself. The line-0 restart has
+        // already happened by then, so the channel must pick up from those registers.
+        Snes snes = boot(IDLE_LOOP);
+        SnesBus bus = snes.bus();
+        bus.writeA(0x002181, 0x00);   // WRAM port at $10000, as above
+        bus.writeA(0x002182, 0x00);
+        bus.writeA(0x002183, 0x01);
+        int[] table = {0x01, 0x11, 0x00}; // 1 line: send $11; end
+        for (int i = 0; i < table.length; i++) {
+            snes.wram().write(0x0200 + i, table[i]);
+        }
+        bus.writeA(0x004300, 0x00);
+        bus.writeA(0x004301, 0x80);
+        bus.writeA(0x004302, 0xEE);   // the table start ($43x2-3) points elsewhere: not used
+        bus.writeA(0x004303, 0xEE);
+        bus.writeA(0x004304, 0x7E);
+        snes.runFrame();              // a frame with HDMA off, so line 0 restarts nothing
+
+        while (snes.clock().v() != 10) {
+            snes.cpu().step();
+        }
+        bus.writeA(0x004308, 0x00);   // current table address: $0200
+        bus.writeA(0x004309, 0x02);
+        bus.writeA(0x00430A, 0x01);   // the counter runs out after this line: load an entry
+        bus.writeA(0x00420C, 0x01);
+        snes.runFrame();
+
+        assertEquals(0x11, snes.wram().read(0x10000), "the entry at $43x8 was used");
+        assertEquals(0x00, snes.wram().read(0x10001), "and the table then ended");
+    }
+
     // ---- Helpers ------------------------------------------------------------------------------
 
     private static Snes boot(int[] program) {

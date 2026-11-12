@@ -41,7 +41,7 @@ failure details.
 | `CartridgeTest`, `MirroringTest`, `RealRomTest` | loading, mapping, SRAM saves, real ROM checksums, every ROM's coprocessor supported |
 | `GsuTest` | SuperFX core: hand-assembled programs (delay slot, prefixes, RAM byte order, multiplies, PLOT/RPIX) |
 | `SuperFxTest` | SuperFX board: memory map, registers, bus sharing, catch-up, STOP IRQ, cache window |
-| `SnesTest` | memory map, access timing, frame length, NMI, V-IRQ, DMA, HDMA (hand-assembled programs) |
+| `SnesTest` | memory map, access timing, frame length, NMI, V-IRQ, DMA, HDMA incl. mid-frame enable (hand-assembled programs) |
 | `PpuPortsTest`, `RendererTest`, `EffectsTest` | VRAM/CGRAM/OAM ports, layers, sprites, priorities, color math, windows, Mode 7, mosaic |
 | `ApuTest`, `DspTest` | boot ROM upload protocol, timers, voice playback, ENDX, key off |
 | `ArithmeticUnitTest`, `JoypadPortsTest`, `GamepadMappingTest` | small units |
