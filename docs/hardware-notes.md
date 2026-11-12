@@ -67,6 +67,31 @@ the test suites or by tracing real games. Before "fixing" behavior listed here, 
 - Writes to `$F0-$FF` also reach the RAM underneath; the boot ROM area is RAM under the ROM.
 - Timer targets of 0 mean 256. Timer outputs are 4-bit and clear when read.
 
+## SuperFX (GSU)
+
+Sources: Fullsnes-style register descriptions and well-known emulator behavior, from memory;
+checked by `GsuTest`/`SuperFxTest` and by Star Fox and Yoshi's Island running.
+
+- **Pipeline/delay slot**: the byte after any instruction that changes R15 (branches, JMP,
+  LOOP, IWT/IBT/MOVE to R15) still executes. Branch targets are relative to the delay slot's
+  address. STOP replaces its delay-slot byte with a NOP, so the next start begins cleanly.
+- **Prefixes**: TO/FROM/WITH/ALTx don't clear the prefix state; every other instruction does
+  (branches don't either). TO/FROM right after WITH mean MOVE/MOVES.
+- **RAM words**: low byte at the address, high byte at `address ^ 1`.
+- **MERGE** sets Z when any of bits 4-7/12-15 is set (a range test, not a zero test).
+- **DIV2** is ASR except that -1 becomes 0.
+- **Cache**: 512 bytes in 16-byte lines, indexed by the low 9 address bits; code within
+  [CBR, CBR+512) is fetched through it. The console's window $3100+n is code address CBR+n.
+  Writing a line's last byte marks it valid. Clearing G from the console resets CBR to 0.
+- **Plotting** writes SNES tiles directly (character-mapped screen); see `PlotUnit`.
+- **Bus sharing**: while the GSU runs with RON, console ROM reads return
+  `00 01 00 01 04 01 00 01 00 01 08 01 00 01 0C 01` by address bits 3-0, so the native vectors
+  read COP $0104, BRK $0100, NMI $0108, IRQ $010C (work RAM). Star Fox's own header even lists
+  NMI $0108 / IRQ $010C. With RAN, console RAM reads are open bus.
+- **RAM size**: Yoshi's Island declares 32 KiB at $FFBD (extended header, developer ID $33).
+  Star Fox has no extended header; its board has 32 KiB, which is the default.
+- STOP raises the cartridge IRQ unless CFGR bit 7 is set; reading $3031 acknowledges it.
+
 ## Game-specific observations (not bugs)
 
 - **Super Mario World**: the opening "Welcome to Dinosaur Land" message ignores buttons for

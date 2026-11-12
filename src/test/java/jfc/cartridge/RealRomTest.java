@@ -1,13 +1,14 @@
 package jfc.cartridge;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
+import jfc.coprocessor.Coprocessors;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -36,6 +37,6 @@ class RealRomTest {
         Cartridge cart = Cartridge.load(rom);
 
         assertEquals(cart.header().checksum(), cart.computeChecksum());
-        assertFalse(cart.header().hasCoprocessor(), "coprocessor carts aren't supported yet");
+        assertTrue(Coprocessors.isSupported(cart), "unsupported coprocessor: " + cart.header().coprocessorType());
     }
 }

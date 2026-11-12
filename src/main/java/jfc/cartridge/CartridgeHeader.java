@@ -13,6 +13,8 @@ import java.nio.charset.StandardCharsets;
  *   $FFD8        SRAM size as a power of two: 1 KiB &lt;&lt; n (0 = none)
  *   $FFD9        Destination region code
  *   $FFDA        Developer ID ($33 means an extended header sits just below $FFC0)
+ *   ($FFBD)      In that extended header: expansion RAM size, 1 KiB &lt;&lt; n. SuperFX games
+ *                use it for the GSU's RAM.
  *   $FFDB        Version number
  *   $FFDC-$FFDD  Checksum complement (checksum XOR $FFFF)
  *   $FFDE-$FFDF  Checksum (16-bit sum of every ROM byte)
@@ -25,6 +27,8 @@ import java.nio.charset.StandardCharsets;
  *
  * @param headerFileOffset where in the ROM file the header was found
  * @param vectors          the 65816 interrupt vectors from $FFE0-$FFFF
+ * @param expansionRamSizeByte $FFBD from the extended header, or 0 when there's no extended
+ *                         header (developer ID other than $33)
  */
 public record CartridgeHeader(
         int headerFileOffset,
@@ -38,7 +42,8 @@ public record CartridgeHeader(
         int version,
         int checksumComplement,
         int checksum,
-        Vectors vectors) {
+        Vectors vectors,
+        int expansionRamSizeByte) {
 
     /** Size of the header block plus the interrupt vectors that follow it. */
     public static final int LENGTH = 0x40;
@@ -58,6 +63,9 @@ public record CartridgeHeader(
     /** Reads the header found at {@code offset} within {@code rom}. */
     public static CartridgeHeader parse(byte[] rom, int offset) {
         String title = new String(rom, offset, 21, StandardCharsets.US_ASCII).stripTrailing();
+        int developerId = readByte(rom, offset + 0x1A);
+        // The extended header (16 bytes at $FFB0-$FFBF) only exists when the developer ID is $33.
+        int expansionRamSizeByte = developerId == 0x33 && offset >= 3 ? readByte(rom, offset - 0x03) : 0;
         Vectors vectors = new Vectors(
                 readWord(rom, offset + 0x24), // $FFE4
                 readWord(rom, offset + 0x26), // $FFE6
@@ -77,11 +85,12 @@ public record CartridgeHeader(
                 readByte(rom, offset + 0x17),
                 readByte(rom, offset + 0x18),
                 readByte(rom, offset + 0x19),
-                readByte(rom, offset + 0x1A),
+                developerId,
                 readByte(rom, offset + 0x1B),
                 readWord(rom, offset + 0x1C),
                 readWord(rom, offset + 0x1E),
-                vectors);
+                vectors,
+                expansionRamSizeByte);
     }
 
     /**
@@ -147,6 +156,24 @@ public record CartridgeHeader(
     /** True when the board carries a coprocessor that we would have to emulate as well. */
     public boolean hasCoprocessor() {
         return (cartridgeTypeByte & 0x0F) >= 0x03;
+    }
+
+    /** Which coprocessor the board carries, from the high nibble of the cartridge type byte. */
+    public CoprocessorType coprocessorType() {
+        if (!hasCoprocessor()) {
+            return CoprocessorType.NONE;
+        }
+        return switch (cartridgeTypeByte >> 4) {
+            case 0x0 -> CoprocessorType.DSP;
+            case 0x1 -> CoprocessorType.SUPER_FX;
+            case 0x3 -> CoprocessorType.SA1;
+            default -> CoprocessorType.OTHER;
+        };
+    }
+
+    /** Expansion RAM from the extended header ($FFBD), in bytes; 0 when not declared. */
+    public int expansionRamSizeBytes() {
+        return expansionRamSizeByte == 0 ? 0 : 1024 << expansionRamSizeByte;
     }
 
     /**

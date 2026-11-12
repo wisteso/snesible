@@ -13,8 +13,19 @@ import java.util.Arrays;
  * <p>The system bus asks the cartridge to handle any address that isn't work RAM or a console
  * register. {@link #read} returns {@link #OPEN_BUS} when the cartridge doesn't drive the data
  * bus at that address, so the bus can supply its open-bus value instead.
+ *
+ * <p>Boards with a coprocessor (see {@link CoprocessorType}) have their own wiring. For those,
+ * the coprocessor implements {@link CartridgeSlot} and decodes addresses itself, using this
+ * class only as the holder of the ROM and RAM bytes ({@link #romBytes()}, {@link #ramBytes()})
+ * and of the save-file logic.
  */
-public final class Cartridge {
+public final class Cartridge implements CartridgeSlot {
+
+    /**
+     * GSU RAM size for SuperFX games whose header predates the extended header. Star Fox is one;
+     * its board has 32 KiB.
+     */
+    private static final int DEFAULT_SUPER_FX_RAM = 32 * 1024;
 
     /** Returned by {@link #read} when no cartridge chip answers at the address. */
     public static final int OPEN_BUS = -1;
@@ -39,13 +50,26 @@ public final class Cartridge {
         this.mapMode = mapMode;
         this.hadCopierHeader = hadCopierHeader;
         this.header = CartridgeHeader.parse(rom, mapMode.headerFileOffset());
-        this.sram = new byte[header.sramSizeBytes()];
+        this.sram = new byte[ramSize(header)];
         this.mapper = switch (mapMode) {
             case LOROM -> new LoRomMapper(rom.length, sram.length);
             case HIROM -> new HiRomMapper(rom.length, sram.length);
             case EXHIROM -> throw new UnsupportedOperationException(
                     "ExHiROM cartridges aren't supported yet: " + header.title());
         };
+    }
+
+    /**
+     * The size of the cartridge RAM. Usually that's the SRAM the header declares, but a SuperFX
+     * board's RAM (the GSU's work and frame-buffer memory, battery-backed on some games) is
+     * declared as "expansion RAM" in the extended header instead.
+     */
+    private static int ramSize(CartridgeHeader header) {
+        if (header.coprocessorType() == CoprocessorType.SUPER_FX) {
+            int declared = header.expansionRamSizeBytes();
+            return declared > 0 ? declared : DEFAULT_SUPER_FX_RAM;
+        }
+        return header.sramSizeBytes();
     }
 
     /** Loads a .sfc or .smc file. */
@@ -67,6 +91,7 @@ public final class Cartridge {
      *
      * @return the byte as 0-255, or {@link #OPEN_BUS} if the cartridge doesn't respond there
      */
+    @Override
     public int read(int address) {
         int romOffset = mapper.romOffset(address);
         if (romOffset != Mapper.NOT_MAPPED) {
@@ -80,12 +105,39 @@ public final class Cartridge {
     }
 
     /** Writes one byte. Only SRAM is writable, and writes elsewhere are ignored, as on hardware. */
+    @Override
     public void write(int address, int value) {
         int sramOffset = mapper.sramOffset(address);
         if (sramOffset != Mapper.NOT_MAPPED && sram[sramOffset] != (byte) value) {
             sram[sramOffset] = (byte) value;
             sramChanged = true;
         }
+    }
+
+    // =============================================================================================
+    // Raw memory, for coprocessor boards that decode addresses themselves
+    // =============================================================================================
+
+    /**
+     * The ROM image itself (not a copy). Coprocessor boards read it directly; nothing may write
+     * to it.
+     */
+    public byte[] romBytes() {
+        return rom;
+    }
+
+    /**
+     * The cartridge RAM itself (not a copy): SRAM on plain boards, the coprocessor's RAM on
+     * others. Boards that write it on the CPU's behalf call {@link #markRamChanged()} so the
+     * save file gets updated.
+     */
+    public byte[] ramBytes() {
+        return sram;
+    }
+
+    /** Records that RAM holds data the save file doesn't have yet. */
+    public void markRamChanged() {
+        sramChanged = true;
     }
 
     // =============================================================================================

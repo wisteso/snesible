@@ -3,6 +3,9 @@ package jfc.system;
 import jfc.apu.Apu;
 import jfc.bus.SnesBus;
 import jfc.cartridge.Cartridge;
+import jfc.cartridge.CartridgeSlot;
+import jfc.coprocessor.Coprocessor;
+import jfc.coprocessor.Coprocessors;
 import jfc.cpu.Cpu;
 import jfc.cpu.io.ArithmeticUnit;
 import jfc.cpu.io.InterruptControl;
@@ -30,6 +33,8 @@ import jfc.ppu.Ppu;
 public final class Snes implements MasterClock.Listener {
 
     private final Cartridge cartridge;
+    /** The chip on the cartridge board (SuperFX, ...), or null for a plain cartridge. */
+    private final Coprocessor coprocessor;
     private final MasterClock clock;
     private final WorkRam wram = new WorkRam();
     private final Ppu ppu;
@@ -52,13 +57,30 @@ public final class Snes implements MasterClock.Listener {
         this.dma = new DmaController(clock);
         this.apu = new Apu(clock, pal);
         this.interrupts = new InterruptControl(clock, ppu);
-        this.bus = new SnesBus(clock, wram, cartridge, ppu, apu, interrupts, math, joypads, dma);
+        // A coprocessor board answers for the whole cartridge space; otherwise the plain
+        // cartridge does.
+        this.coprocessor = Coprocessors.forCartridge(cartridge);
+        CartridgeSlot slot = coprocessor != null ? coprocessor : cartridge;
+        this.bus = new SnesBus(clock, wram, slot, ppu, apu, interrupts, math, joypads, dma);
         this.cpu = new Cpu(bus);
         // The interrupt logic drives the CPU's NMI and IRQ pins, but the CPU can only be built
         // once its bus exists, and the bus needs the interrupt logic. So connect it afterwards.
         interrupts.connect(cpu);
         dma.setBus(bus);
         clock.setListener(this);
+        if (coprocessor != null) {
+            coprocessor.connect(new Coprocessor.Host() {
+                @Override
+                public long masterCycles() {
+                    return clock.totalCycles();
+                }
+
+                @Override
+                public void setIrqLine(boolean asserted) {
+                    interrupts.setCartridgeIrq(asserted);
+                }
+            });
+        }
     }
 
     /**
@@ -67,6 +89,9 @@ public final class Snes implements MasterClock.Listener {
      */
     public void reset() {
         apu.reset();
+        if (coprocessor != null) {
+            coprocessor.reset();
+        }
         cpu.reset();
     }
 
@@ -80,6 +105,9 @@ public final class Snes implements MasterClock.Listener {
             cpu.step();
         }
         apu.catchUp();
+        if (coprocessor != null) {
+            coprocessor.catchUp();
+        }
     }
 
     /** HDMA runs at about dot 276, just after the visible part of each line ends. */
@@ -91,6 +119,11 @@ public final class Snes implements MasterClock.Listener {
     public void onLineStart(int line) {
         if (line == 0) {
             clock.stall(dma.initHdma());
+        }
+        if (coprocessor != null) {
+            // Keep the coprocessor at most a line behind, so its interrupt arrives on time
+            // even when the CPU is just waiting for it.
+            coprocessor.catchUp();
         }
         ppu.onLineStart(line);
         interrupts.onLineStart(line);
@@ -152,6 +185,11 @@ public final class Snes implements MasterClock.Listener {
 
     public Cartridge cartridge() {
         return cartridge;
+    }
+
+    /** The cartridge's coprocessor, or null when it has none. */
+    public Coprocessor coprocessor() {
+        return coprocessor;
     }
 
     public Apu apu() {

@@ -16,6 +16,8 @@ piece in detail.
 | `jfc.bus`       | Memory map and per-access timing | `SnesBus` |
 | `jfc.ppu`       | Picture processor | `Ppu` (registers and memories), `Renderer` (pipeline), `BackgroundLayer`, `SpriteLayer`, `Mode7Layer`, `WindowMasks`, `Tiles`, `LayerLine` |
 | `jfc.apu`       | Audio unit | `Apu` (RAM, I/O, timers, sync), `Spc700`, `Dsp`, `BootRom`, `ApuPorts` |
+| `jfc.coprocessor` | Chips on the cartridge board | `Coprocessor` (interface), `Coprocessors` (factory) |
+| `jfc.coprocessor.superfx` | SuperFX / GSU | `SuperFx` (board: both address maps, registers, catch-up), `Gsu` (the RISC core), `PlotUnit` (PLOT/RPIX), `GsuBus` |
 | `jfc.system`    | The console | `Snes` (wiring and frame loop), `MasterClock`, `WorkRam` |
 | `jfc.ui`        | Window, sound, frame pacing, keyboard | `EmulatorWindow`, `AudioOutput` |
 | `jfc.ui.input`  | Gamepads | `Gamepads`, `WinmmJoysticks`, `GamepadMapping`, `JoystickState` |
@@ -42,6 +44,7 @@ piece in detail.
 
 ### Per-line events (in `Snes`)
 - `onLineStart(0)`: HDMA tables restart (`DmaController.initHdma()`).
+- `onLineStart(any)`: the cartridge coprocessor, if any, catches up.
 - `onBeamMoved` at **dot 22** (h = 88, `Ppu.FIRST_VISIBLE_DOT`) on beam lines 1..visible: the
   PPU draws **picture line n-1** (beam line 0 is never shown). Drawing at the first visible dot
   rather than at h = 0 means writes made in the early horizontal blank (dots 0-21) apply to
@@ -69,6 +72,30 @@ The SPC700 side of the `Apu` is an inner class (`SpcSide implements Spc700Bus`),
 `ApuPorts.read(int)` and `Spc700Bus.read(int)` have the same signature but different meanings.
 Each SPC bus cycle calls `tick()`: timers advance, and every 32nd tick the DSP makes a sample,
 which goes into `Apu`'s sample buffer (drained by `drainSamples`).
+
+## Cartridge coprocessors (`jfc.coprocessor`)
+
+`SnesBus` doesn't talk to `Cartridge` directly but to a `CartridgeSlot`: whatever answers in
+cartridge space. For a plain game that's the `Cartridge`. For a coprocessor board it's the
+`Coprocessor`, which decodes the whole cartridge space itself (its registers, the ROM, its
+RAM) and uses `Cartridge` only to hold the ROM/RAM bytes (`romBytes()`, `ramBytes()`) and the
+save-file logic (`markRamChanged()`). `Coprocessors.forCartridge` picks the board from the
+header's `coprocessorType()`; `Snes` builds it and gives it a `Coprocessor.Host` (master
+clock + the cartridge IRQ line, which `InterruptControl.setCartridgeIrq` ORs with the timer
+IRQ). This keeps `jfc.coprocessor` free of `jfc.system`.
+
+Timing is catch-up, like the APU: `catchUp()` runs the chip up to the master clock. It runs on
+every console access to the board and at every line start (so the chip's IRQ arrives on time
+even while the CPU sits in WAI), and at the end of each frame.
+
+**SuperFX**: `SuperFx` has two address maps: the console's (`read`/`write`) and the GSU's
+(inner class `GsuSide implements GsuBus`, same trick as `Apu.SpcSide`). `Gsu.step()` runs one
+instruction and returns master cycles. While the GSU owns the ROM (SCMR RON), console ROM
+reads return a fixed pattern that makes the interrupt vectors point into work RAM.
+
+**SA-1 (planned)**: a `jfc.coprocessor.sa1` board implementing `Coprocessor`, running a second
+`jfc.cpu.Cpu` on its own `CpuBus` (the 65816 core doesn't care whose bus it's on), with its
+I-RAM, BW-RAM and registers at $2200-$23FF (which `SnesBus` already routes to the cartridge).
 
 ## Rendering pipeline (`Renderer.renderLine`)
 

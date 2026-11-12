@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.Map;
 import jfc.cartridge.Cartridge;
 import jfc.cartridge.CartridgeHeader;
+import jfc.coprocessor.Coprocessors;
 import jfc.cpu.Registers;
 import jfc.system.Snes;
 import jfc.ui.EmulatorWindow;
@@ -131,6 +132,10 @@ public final class Main {
         row("Cartridge", h.describeCartridgeType() + "  (type byte " + hex2(h.cartridgeTypeByte()) + ")");
         row("ROM", kib(cart.romSize()) + "  (header says " + kib(h.declaredRomSizeBytes()) + ")");
         row("SRAM", h.sramSizeBytes() == 0 ? "none" : kib(h.sramSizeBytes()));
+        if (h.hasCoprocessor()) {
+            row("Coprocessor", h.coprocessorType() + ", board RAM " + kib(cart.sramSize())
+                    + (Coprocessors.isSupported(cart) ? "" : "  (NOT EMULATED: the game won't run)"));
+        }
         row("Region", h.region().toString());
         row("Developer", hex2(h.developerId()) + ", version 1." + h.version());
         row("Checksum", hex(h.checksum(), 4) + " / complement " + hex(h.checksumComplement(), 4)

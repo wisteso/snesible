@@ -1,7 +1,7 @@
 package jfc.bus;
 
 import jfc.apu.ApuPorts;
-import jfc.cartridge.Cartridge;
+import jfc.cartridge.CartridgeSlot;
 import jfc.cpu.CpuBus;
 import jfc.cpu.io.ArithmeticUnit;
 import jfc.cpu.io.InterruptControl;
@@ -25,7 +25,8 @@ import jfc.system.WorkRam;
  *     $4300-$437F  DMA channel registers                             6 cycles
  *     $6000-$7FFF  cartridge (e.g. HiROM SRAM)                       8 cycles
  *     $8000-$FFFF  cartridge ROM                                     8, or 6 with FastROM
- *     anything else in $2000-$5FFF goes to the cartridge (usually open bus)
+ *     anything else in $2000-$5FFF goes to the cartridge (usually open bus; coprocessors
+ *     put their registers here, e.g. the SuperFX at $3000-$32FF)
  *   Banks $40-$7D and $C0-$FF: cartridge                             8, or 6 with FastROM
  *   Banks $7E-$7F: all 128 KiB of work RAM                           8 cycles
  * </pre>
@@ -49,7 +50,8 @@ public final class SnesBus implements CpuBus, DmaController.Bus {
 
     private final MasterClock clock;
     private final WorkRam wram;
-    private final Cartridge cartridge;
+    /** The cartridge, or the coprocessor board standing in front of it. */
+    private final CartridgeSlot cartridge;
     private final Ppu ppu;
     private final ApuPorts apu;
     private final InterruptControl interrupts;
@@ -72,7 +74,7 @@ public final class SnesBus implements CpuBus, DmaController.Bus {
     /** WRIO ($4201): an output port on the controller connectors, also wired to the H/V latch. */
     private int wrio = 0xFF;
 
-    public SnesBus(MasterClock clock, WorkRam wram, Cartridge cartridge, Ppu ppu, ApuPorts apu,
+    public SnesBus(MasterClock clock, WorkRam wram, CartridgeSlot cartridge, Ppu ppu, ApuPorts apu,
                    InterruptControl interrupts, ArithmeticUnit math, JoypadPorts joypads,
                    DmaController dma) {
         this.clock = clock;
