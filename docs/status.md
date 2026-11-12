@@ -74,8 +74,8 @@ Each is documented where it lives in the code.
   Clown Car, beanstalk, an isometric battle), title, file select, name entry, the opening story,
   the walk over the bridge into Bowser's Keep and around its hall. Music plays (checked by
   recording audio). About 5x real time.
-- Not verified: after skipping the intro with Start, the title and file select are silent for
-  about 6 s before the story music starts. Unknown whether the real game does the same.
+- After skipping the intro with Start, the title and file select are silent for about 6 s
+  before the story music starts. The user confirmed the real game is silent there too.
 - Not implemented (Super Mario RPG doesn't use them in the parts tested; a temporary log
   showed it only initializes the timer to off and never starts a character-conversion DMA):
   the SA-1 H/V timer and its IRQ, character-conversion DMA (types 1 and 2), BW-RAM and I-RAM
