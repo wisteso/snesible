@@ -50,6 +50,15 @@ the test suites or by tracing real games. Before "fixing" behavior listed here, 
   **Don't mask to 10 bits before latching**: that dropped bit 2 and made SMW's layers jitter by
   4 px (fixed, regression test `horizontalScrollKeepsAllEightBitsOfTheFirstWrite`).
 - `$210D/$210E` also set the 13-bit Mode 7 scroll via the shared Mode 7 latch.
+- **Offset-per-tile** (modes 2 and 4; bsnes's behavior): BG3's map is a table, read at BG3's
+  scroll (row 0 = H offsets, row 1 = V offsets in mode 2; one row with bit 15 = vertical in
+  mode 4). Bit 13 applies an entry to BG1, bit 14 to BG2. Screen column *c* (counted after the
+  layer's own fine scroll, `screenX + (hScroll & 7)`) uses table column *c - 1*; column 0 never
+  uses the table. An H entry replaces bits 9-3 of the scroll and keeps the layer's bits 2-0;
+  a V entry replaces all 10 bits and still gets the beam-line +1. **Star Fox** draws its sky
+  and ground in mode 2 with every BG2 V entry `$40F8` (248) while BG2VOFS is 232. Without
+  offset-per-tile the horizon sat 16 lines below the 3D scene's vanishing point (the user
+  spotted it). Steering tilts the horizon in 8-pixel steps through these entries.
 - Sprite tile fetch (34 tiles per line) proceeds from the *last* in-range sprite backward, so
   when the budget runs out, the lowest-index sprites lose tiles. (I'm fairly but not fully sure
   of this; the user was asked to double-check it.)
@@ -102,6 +111,20 @@ checked by `GsuTest`/`SuperFxTest` and by Star Fox and Yoshi's Island running.
 - **RAM size**: Yoshi's Island declares 32 KiB at $FFBD (extended header, developer ID $33).
   Star Fox has no extended header; its board has 32 KiB, which is the default.
 - STOP raises the cartridge IRQ unless CFGR bit 7 is set; reading $3031 acknowledges it.
+- **Background ROM/RAM buffers**: refilling the ROM buffer (on an R14 write) and RAM byte
+  writes run alongside later instructions; only the next use of the same buffer waits (as in
+  bsnes). Charging them up front made Star Fox noticeably slower in GSU-bound scenes.
+- **Star Fox frame rate** (measured headless by counting picture changes per 60 frames):
+  - The game caps itself at a new picture every third frame (20 fps): the title demo and the
+    mission briefing run there, with the GSU only ~64% busy.
+  - It copies each finished picture to VRAM in chunks, from an IRQ near line 207 (state in
+    WRAM `$00`: 2, 4, 6, then 0 when done). A chunk is skipped while the GSU still owns its
+    RAM, so a GSU job that runs past line 207 costs a whole extra frame. In Training, job
+    `01:AC1D` ran ~253 lines and made each picture take 4 frames instead of 3.
+  - The "scramble" launch scene: ~8.9 pictures/s with up-front buffer costs, ~10.4 with
+    background buffers. A Snes9x recording the user made (`docs/starfox-scramble.mp4`, not
+    committed) shows ~11.8, and covers the scene faster than we do. The user suspects Snes9x
+    runs the GSU faster than real hardware, and believes ~15 fps is normal for Star Fox.
 
 ## SA-1
 

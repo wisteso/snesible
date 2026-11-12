@@ -44,7 +44,7 @@ failure details.
 | `SuperFxTest` | SuperFX board: memory map, registers, bus sharing, catch-up, STOP IRQ, cache window |
 | `Sa1Test` | SA-1 board: Super MMC, BW-RAM and bitmap view, I-RAM sharing, messages/IRQs, vectors, math, DMA, bit reader (tiny SA-1 programs) |
 | `SnesTest` | memory map, access timing, frame length, NMI, V-IRQ, DMA, HDMA incl. mid-frame enable (hand-assembled programs) |
-| `PpuPortsTest`, `RendererTest`, `EffectsTest` | VRAM/CGRAM/OAM ports, layers, sprites, priorities, color math, windows, Mode 7, mosaic |
+| `PpuPortsTest`, `RendererTest`, `EffectsTest` | VRAM/CGRAM/OAM ports, layers, sprites, priorities, color math, windows, Mode 7, mosaic, offset-per-tile |
 | `ApuTest`, `DspTest` | boot ROM upload protocol, timers, voice playback, ENDX, key off |
 | `ArithmeticUnitTest`, `JoypadPortsTest`, `GamepadMappingTest` | small units |
 

@@ -48,8 +48,15 @@ package jfc.coprocessor.superfx;
  * Each step returns the master cycles it took: a cached code byte costs one GSU clock, a ROM or
  * RAM access about 5-6 master cycles, plus extra time for multiplies and pixel-cache flushes.
  * One GSU clock is 2 master cycles at 10.7 MHz (CLSR = 0) and 1 at 21.4 MHz (CLSR = 1).
- * <i>Simplification:</i> the ROM and RAM buffers' waits are folded into fixed costs; the exact
- * cycle counts don't affect what games compute, only how long it takes.
+ *
+ * <p>Two memory accesses run <b>in the background</b>, as on the chip: refilling the ROM buffer
+ * (after R14 changes) and writing a byte to RAM (STW, SM, SBK, ...). The GSU starts the access
+ * and carries on with the next instructions; only something that needs the same buffer again
+ * (GETB reading the ROM byte, another RAM access, a code fetch from that memory) waits for
+ * the rest of it. Games rely on this: Star Fox writes R14 a few instructions before its GETB,
+ * so the ROM fetch costs almost nothing. Charging these accesses up front slowed Star Fox's
+ * GSU-bound scenes: its "scramble" launch scene drew about 9 pictures a second instead of 10.4.
+ * The exact cycle counts don't affect what games compute, only how long it takes.
  */
 final class Gsu {
 
@@ -111,6 +118,10 @@ final class Gsu {
 
     /** Master cycles spent by the instruction in progress. */
     private int cycles;
+    /** Master cycles until the background ROM buffer fetch finishes (0 = idle). */
+    private int romBufferBusy;
+    /** Master cycles until the background RAM write finishes (0 = idle). */
+    private int ramBufferBusy;
     /** Called when STOP raises the interrupt. */
     private final Runnable onInterrupt;
 
@@ -131,6 +142,7 @@ final class Gsu {
         fastClock = ownsRom = ownsRam = false;
         pipeline = NOP;
         romBuffer = 0;
+        romBufferBusy = ramBufferBusy = 0;
         lastRamAddress = 0;
         flushCache();
         plot.reset();
@@ -366,14 +378,19 @@ final class Gsu {
     private void plotOrReadPixel() {
         if (!alt1) {
             // PLOT draws at (R1, R2) and steps R1 right, ready for the next pixel of a span.
-            cycles += plot.plot(r[1] & 0xFF, r[2] & 0xFF, memoryCycles());
+            int flushCycles = plot.plot(r[1] & 0xFF, r[2] & 0xFF, memoryCycles());
+            if (flushCycles > 0) {
+                waitForRamBuffer(); // the flush writes to RAM itself
+                spend(flushCycles);
+            }
             setRegister(1, r[1] + 1);
         } else {
             // RPIX reads a pixel back (the real chip first flushes its pixel cache).
             int color = plot.readPixel(r[1] & 0xFF, r[2] & 0xFF);
             setRegister(destinationRegister, color);
             setSignZero(color);
-            cycles += plot.bitsPerPixel() * memoryCycles();
+            waitForRamBuffer();
+            spend(plot.bitsPerPixel() * memoryCycles());
         }
         resetPrefixes();
     }
@@ -461,7 +478,7 @@ final class Gsu {
         int result = alt1 ? (s & 0xFF) * (operand & 0xFF) : (byte) s * (byte) operand;
         writeResult(result);
         if ((config & 0x20) == 0) {
-            cycles += gsuClock(); // the slow multiplier takes an extra clock
+            spend(gsuClock()); // the slow multiplier takes an extra clock
         }
     }
 
@@ -537,7 +554,7 @@ final class Gsu {
         zero = high == 0;
         carry = (product & 0x8000) != 0;
         resetPrefixes();
-        cycles += ((config & 0x20) != 0 ? 3 : 7) * gsuClock();
+        spend(((config & 0x20) != 0 ? 3 : 7) * gsuClock());
     }
 
     // ---- $A0-$AF: IBT / LMS / SMS;  $F0-$FF: IWT / LM / SM
@@ -587,6 +604,7 @@ final class Gsu {
     /** GETC (none or ALT1): color from the ROM buffer; RAMB (ALT2) / ROMB (ALT3): set a bank. */
     private void getcRambRomb() {
         if (!alt2) {
+            waitForRomBuffer();
             plot.color = plot.colorFrom(romBuffer);
         } else if (!alt1) {
             ramBank = sourceValue() & 0x01;
@@ -600,6 +618,7 @@ final class Gsu {
     private void getb() {
         int s = sourceValue();
         int result;
+        waitForRomBuffer();
         if (alt1 && alt2) {
             result = (byte) romBuffer;                // GETBS
         } else if (alt1) {
@@ -654,20 +673,60 @@ final class Gsu {
         destinationRegister = 0;
     }
 
-    /** Fetches the ROM byte at ROMBR:R14 into the buffer GETB and GETC read. */
+    /**
+     * Starts fetching the ROM byte at ROMBR:R14 into the buffer GETB and GETC read. The fetch
+     * runs in the background; GETB/GETC wait for whatever is left of it. (The byte is read
+     * right away here, which gives the same result: nothing can change ROM meanwhile.)
+     */
     void refreshRomBuffer() {
+        waitForRomBuffer();
         romBuffer = bus.read(romBank << 16 | r[14]);
-        cycles += memoryCycles();
+        romBufferBusy = memoryCycles();
     }
 
     private int readRam(int address) {
-        cycles += memoryCycles();
+        waitForRamBuffer();
+        spend(memoryCycles());
         return bus.read(0x700000 | ramBank << 16 | (address & 0xFFFF));
     }
 
+    /**
+     * Starts a background RAM write. Only the next RAM access waits for it. (The byte is
+     * stored right away; nothing reads it before the write would have finished.)
+     */
     private void writeRam(int address, int value) {
-        cycles += memoryCycles();
+        waitForRamBuffer();
         bus.write(0x700000 | ramBank << 16 | (address & 0xFFFF), value & 0xFF);
+        ramBufferBusy = memoryCycles();
+    }
+
+    /**
+     * Spends master cycles on the instruction in progress. Background ROM and RAM accesses
+     * make progress at the same time.
+     */
+    private void spend(int masterCycles) {
+        cycles += masterCycles;
+        romBufferBusy = Math.max(0, romBufferBusy - masterCycles);
+        ramBufferBusy = Math.max(0, ramBufferBusy - masterCycles);
+    }
+
+    /** Waits for a background ROM buffer fetch to finish. */
+    private void waitForRomBuffer() {
+        spend(romBufferBusy);
+    }
+
+    /** Waits for a background RAM write to finish. */
+    private void waitForRamBuffer() {
+        spend(ramBufferBusy);
+    }
+
+    /** Waits for the background access to the memory that holds {@code bank}, ROM or RAM. */
+    private void waitForBufferOf(int bank) {
+        if (bank >= 0x70 && bank <= 0x71) {
+            waitForRamBuffer();
+        } else {
+            waitForRomBuffer();
+        }
     }
 
     /**
@@ -679,7 +738,8 @@ final class Gsu {
     int fetchCode(int address) {
         int offset = (address - cacheBase) & 0xFFFF;
         if (offset >= CACHE_SIZE) {
-            cycles += memoryCycles();
+            waitForBufferOf(programBank);
+            spend(memoryCycles());
             return bus.read(programBank << 16 | address);
         }
         // The cache is indexed by the low 9 address bits, so cache byte i always holds the
@@ -689,13 +749,14 @@ final class Gsu {
         int line = index / CACHE_LINE;
         if (!cacheLineValid[line]) {
             int lineAddress = address & 0xFFF0;
+            waitForBufferOf(programBank);
             for (int i = 0; i < CACHE_LINE; i++) {
                 cache[line * CACHE_LINE + i] = (byte) bus.read(programBank << 16 | ((lineAddress + i) & 0xFFFF));
-                cycles += memoryCycles();
+                spend(memoryCycles());
             }
             cacheLineValid[line] = true;
         } else {
-            cycles += gsuClock();
+            spend(gsuClock());
         }
         return cache[index] & 0xFF;
     }
