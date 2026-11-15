@@ -93,12 +93,37 @@ What the user's examples show, mapped to the model:
 ### Threads with GLFW
 
 GLFW wants its window and event handling on the main thread (mandatory on macOS, good
-practice everywhere). So with `GlVideo`:
-- **Main thread**: GLFW event loop, key/gamepad callbacks, render at the monitor's vsync,
-  always drawing the newest finished frame.
-- **Emulation thread**: unchanged role (paced by audio).
-- 60.10 Hz emulation on a 60 Hz monitor shows one repeated frame about every 10 s. Fine to
-  start with; syncing to vsync with audio resampling is a later option.
+practice everywhere). With `GlVideo` the main thread runs the GLFW event loop, input
+callbacks and rendering. Emulating a frame takes 1-3 ms, so it can run on the main thread too,
+right before the frame is drawn (see pacing below). The Swing window keeps today's
+emulation thread, paced by audio.
+
+### Frame pacing (fixes the ~35 ms gaps)
+
+Today the emulator keeps time by blocking on audio writes. The sound device frees buffer space
+in ~30 ms chunks, so frames arrive unevenly (two quickly, then a 35 ms gap), and Swing isn't
+synchronized to the monitor, so a late frame shows the previous picture twice. In 10c the
+display sets the pace, and the sound adapts:
+
+- **Dynamic rate control** (all modes): each frame's audio is resampled by at most 0.5% to keep
+  the sound card's buffer about half full, so audio writes never block and never run dry.
+  The pitch change is inaudible. (Snes9x and RetroArch do the same.)
+- **The pacing mode is picked from the monitor's refresh rate** (`glfwGetVideoMode`):
+  - **A multiple of ~60 Hz (60, 120, 240):** vsync on; emulate one frame every 1, 2 or 4
+    refreshes, draw it, swap. Every frame shows for the same time, so scrolling is perfectly
+    smooth. The game runs at 60.00 Hz instead of 60.10 (0.16% slow, imperceptible).
+  - **Variable refresh (G-Sync / FreeSync):** pace with a steady clock at the SNES's own
+    60.10 Hz and present each frame immediately; the monitor refreshes when the frame
+    arrives. Exact speed and smooth. On Windows this works reliably in fullscreen (windowed
+    needs the driver's "windowed mode" VRR option). Selected with an option, since GLFW can't
+    detect VRR.
+  - **Anything else (for example 144 Hz without VRR):** 144 / 60.1 isn't a whole number, so
+    frames necessarily alternate between 2 and 3 refreshes (14 and 21 ms), a slight judder on
+    smooth scrolling. Two ways around it: fullscreen at 120 Hz (GLFW can request that refresh
+    rate for the fullscreen mode, so the desktop can stay at 144), or VRR. Windowed at 144 Hz
+    falls back to the steady clock.
+- Input latency stays about where it is today: input is read and the frame emulated just
+  before it's drawn.
 
 ### Shader pipeline (GPU)
 
@@ -155,13 +180,15 @@ Tests: a flat colour field decodes back to (nearly) itself; RGB preset ~ identit
 artifact pattern has a 3-pixel period; per-line phase rotates 120 degrees; the frame phase
 cycles 0, 1, 2 as in Snes9x.
 
-**10c. LWJGL window (sharp pixels only).**
+**10c. LWJGL window (sharp pixels only) and frame pacing.**
 Add LWJGL (BOM; `lwjgl`, `lwjgl-glfw`, `lwjgl-opengl`, with natives for Windows plus Linux/
 macOS via Maven profiles). `GlVideo`: GLFW window, vsync, texture upload, aspect-correct
 scaling, fullscreen toggle, keyboard via GLFW. Swing stays behind `--swing`. Packaging:
 the jar plus `target/lib/`, with a manifest `Class-Path` so `java -jar` keeps working
 (decision 6; `jpackage` can make an installer for the open-source release). Update the "no runtime
-dependencies" rule in CLAUDE.md/development.md to "LWJGL only, frontend only".
+dependencies" rule in CLAUDE.md/development.md to "LWJGL only, frontend only". Frame pacing
+as described above: dynamic rate control for audio, vsync pacing on ~60 Hz multiples, a
+steady-clock mode for VRR and other rates, optional fullscreen at a chosen refresh rate.
 
 **10d. Shader pipeline + NTSC passes.**
 Pass framework (load GLSL from resources, FBO chain, uniforms for presets), then passes 1-2.
