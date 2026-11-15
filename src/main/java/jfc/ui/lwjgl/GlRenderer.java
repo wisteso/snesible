@@ -8,102 +8,148 @@ import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import jfc.ui.Frame;
-import jfc.ui.video.VideoFilter;
+import jfc.ui.video.VideoMode;
+import jfc.ui.video.ntsc.SnesNtsc;
 
 /**
  * Draws frames with OpenGL 3.3: owns the textures, the shader programs and the drawing.
  *
- * <h2>Two ways a frame reaches the screen</h2>
+ * <p>Every frame's raw pixels (the PPU's master brightness and 15-bit color packed in an int)
+ * are uploaded unchanged into an integer texture ({@code GL_R32UI}). What happens next depends
+ * on the picture mode:
  * <ul>
- *   <li><b>Sharp pixels</b>: the PPU's raw pixels (master brightness and 15-bit color packed in
- *       an int) are uploaded unchanged into an integer texture ({@code GL_R32UI}), and the
- *       fragment shader {@code snes-pixels.frag} turns each into RGB. The CPU does no
- *       conversion at all.</li>
- *   <li><b>NTSC modes</b>: the Java NTSC filter ({@link VideoFilter}) makes a 602 x 448 RGB
- *       picture on the CPU, which is uploaded to an ordinary color texture and scaled smoothly
- *       by {@code rgb-picture.frag}. (Milestone 10d moves the NTSC filter onto the GPU.)</li>
+ *   <li><b>Sharp pixels</b>: {@code snes-pixels.frag} turns each raw pixel into RGB while
+ *       drawing to the window. The CPU does no conversion at all.</li>
+ *   <li><b>NTSC modes</b>: two passes. First {@code snes-ntsc.frag} runs Blargg's NTSC filter,
+ *       one fragment per output pixel, into an offscreen 602 x 448 texture (a framebuffer
+ *       object), once per frame. Then {@code rgb-picture.frag} scales that picture to the
+ *       window with bilinear filtering. The filter's table of precomputed color smears is built
+ *       by {@link SnesNtsc} in Java when the mode changes and uploaded as a texture; the
+ *       per-frame work is all on the GPU.</li>
  * </ul>
  *
- * <p>Either way the picture is drawn into a <i>viewport</i>: the largest rectangle with the
- * picture's shape that fits the window, centered, with black bars around it.
+ * <p>The picture is drawn into a <i>viewport</i>: the largest rectangle with the picture's
+ * shape that fits the window, centered, with black bars around it.
  *
  * <p>All methods must be called on the thread that owns the OpenGL context (the main thread).
  */
 final class GlRenderer {
 
     private static final String SHADER_DIRECTORY = "/jfc/ui/lwjgl/shaders/";
+    /** The NTSC table texture: 128 columns (3 burst phases x 42) by 8192 colors. */
+    private static final int NTSC_TABLE_WIDTH = 128;
+    private static final int NTSC_TABLE_HEIGHT = 8192;
 
     private final int sharpProgram;
-    private final int rgbProgram;
+    private final int ntscProgram;
+    private final int presentProgram;
     /** OpenGL 3.3 core needs a vertex array object bound to draw, even with no vertex data. */
     private final int emptyVertexArray;
     private final int rawTexture;
-    private final int rgbTexture;
+    private final int ntscTableTexture;
+    private final int ntscPictureTexture;
+    private final int ntscFramebuffer;
 
     // Texture sizes as allocated; reallocated when a picture of another size arrives.
     private int rawWidth;
     private int rawHeight;
-    private int rgbWidth;
-    private int rgbHeight;
+    private int ntscWidth;
+    private int ntscHeight;
+
+    /** The mode whose NTSC table is in the table texture, or null. */
+    private VideoMode ntscTableMode;
 
     // What the next draw shows.
-    private boolean showingRgb;
+    private boolean showingNtsc;
     private int pictureWidth = 256;
     private int pictureHeight = 224;
-    private int[] filtered = new int[0];
 
     GlRenderer() {
         int vertex = compile(GL_VERTEX_SHADER, "fullscreen.vert");
         sharpProgram = link(vertex, compile(GL_FRAGMENT_SHADER, "snes-pixels.frag"));
-        rgbProgram = link(vertex, compile(GL_FRAGMENT_SHADER, "rgb-picture.frag"));
+        ntscProgram = link(vertex, compile(GL_FRAGMENT_SHADER, "snes-ntsc.frag"));
+        presentProgram = link(vertex, compile(GL_FRAGMENT_SHADER, "rgb-picture.frag"));
         glDeleteShader(vertex);
         emptyVertexArray = glGenVertexArrays();
 
-        rawTexture = createTexture(GL_NEAREST); // integer textures can't be filtered anyway
-        rgbTexture = createTexture(GL_LINEAR);
+        rawTexture = createTexture(GL_NEAREST);        // integer textures can't be filtered
+        ntscTableTexture = createTexture(GL_NEAREST);
+        ntscPictureTexture = createTexture(GL_LINEAR); // scaled smoothly to the window
+        ntscFramebuffer = glGenFramebuffers();
     }
 
     /**
-     * Takes a new frame: uploads its raw pixels, or (in an NTSC mode) runs the filter and
-     * uploads the result. The frame's array is only read during this call.
+     * Takes a new frame: uploads its raw pixels and, in an NTSC mode, runs the NTSC pass. The
+     * frame's array is only read during this call.
+     *
+     * @param scanlines with an NTSC mode, darken every second output row (Snes9x's option)
      */
-    void upload(Frame frame, VideoFilter filter) {
-        if (filter.mode().ntscSetup() == null) {
-            glBindTexture(GL_TEXTURE_2D, rawTexture);
-            if (rawWidth != frame.width() || rawHeight != frame.height()) {
-                rawWidth = frame.width();
-                rawHeight = frame.height();
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, rawWidth, rawHeight, 0,
-                        GL_RED_INTEGER, GL_UNSIGNED_INT, (ByteBuffer) null);
-            }
-            // One 32-bit value per texel, read straight from the PPU's frame buffer.
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, frame.width(), frame.height(),
-                    GL_RED_INTEGER, GL_UNSIGNED_INT, frame.pixels());
-            showingRgb = false;
+    void upload(Frame frame, VideoMode mode, boolean scanlines) {
+        glBindTexture(GL_TEXTURE_2D, rawTexture);
+        if (rawWidth != frame.width() || rawHeight != frame.height()) {
+            rawWidth = frame.width();
+            rawHeight = frame.height();
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, rawWidth, rawHeight, 0,
+                    GL_RED_INTEGER, GL_UNSIGNED_INT, (ByteBuffer) null);
+        }
+        // One 32-bit value per texel, read straight from the PPU's frame buffer.
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, frame.width(), frame.height(),
+                GL_RED_INTEGER, GL_UNSIGNED_INT, frame.pixels());
+
+        if (mode.ntscSetup() == null) {
+            showingNtsc = false;
             pictureWidth = frame.width();
             pictureHeight = frame.height();
-            return;
+        } else {
+            runNtscPass(frame, mode, scanlines);
+            showingNtsc = true;
+            pictureWidth = ntscWidth;
+            pictureHeight = ntscHeight;
         }
-        int width = filter.outputWidth(frame.width());
-        int height = filter.outputHeight(frame.height());
-        if (filtered.length < width * height) {
-            filtered = new int[width * height];
+    }
+
+    /** Runs the NTSC filter on the uploaded frame into the offscreen picture texture. */
+    private void runNtscPass(Frame frame, VideoMode mode, boolean scanlines) {
+        if (ntscTableMode != mode) {
+            // Simulating every color's smear takes tens of milliseconds, so only on a mode change.
+            int[] table = new SnesNtsc(mode.ntscSetup()).table();
+            glBindTexture(GL_TEXTURE_2D, ntscTableTexture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, NTSC_TABLE_WIDTH, NTSC_TABLE_HEIGHT, 0,
+                    GL_RED_INTEGER, GL_UNSIGNED_INT, table);
+            ntscTableMode = mode;
         }
-        filter.apply(frame, filtered);
-        glBindTexture(GL_TEXTURE_2D, rgbTexture);
-        if (rgbWidth != width || rgbHeight != height) {
-            rgbWidth = width;
-            rgbHeight = height;
+        int width = SnesNtsc.outWidth(frame.width());
+        int height = frame.height() * 2; // every line twice, as Snes9x draws it
+        if (ntscWidth != width || ntscHeight != height) {
+            ntscWidth = width;
+            ntscHeight = height;
+            glBindTexture(GL_TEXTURE_2D, ntscPictureTexture);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0,
-                    GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, (ByteBuffer) null);
+                    GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
+            glBindFramebuffer(GL_FRAMEBUFFER, ntscFramebuffer);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ntscPictureTexture, 0);
+            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                throw new IllegalStateException("couldn't set up the NTSC framebuffer");
+            }
         }
-        // Each int is 0x00RRGGBB. Read as a 32-bit value with the "BGRA, reversed" layout, its
-        // low byte is blue, then green, then red, then alpha (unused): exactly our ints.
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height,
-                GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, filtered);
-        showingRgb = true;
-        pictureWidth = width;
-        pictureHeight = height;
+
+        glBindFramebuffer(GL_FRAMEBUFFER, ntscFramebuffer);
+        glViewport(0, 0, width, height);
+        glUseProgram(ntscProgram);
+        glUniform1i(glGetUniformLocation(ntscProgram, "picture"), 0);
+        glUniform1i(glGetUniformLocation(ntscProgram, "ntscTable"), 1);
+        glUniform1i(glGetUniformLocation(ntscProgram, "chunkCount"), (frame.width() - 1) / SnesNtsc.IN_CHUNK);
+        // Snes9x steps the first line's burst phase once per frame: 0, 1, 2, 0, ...
+        glUniform1i(glGetUniformLocation(ntscProgram, "framePhase"), (int) (frame.number() % SnesNtsc.BURST_COUNT));
+        glUniform1i(glGetUniformLocation(ntscProgram, "scanlines"), scanlines ? 1 : 0);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, rawTexture);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, ntscTableTexture);
+        glBindVertexArray(emptyVertexArray);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glActiveTexture(GL_TEXTURE0);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
     /**
@@ -111,6 +157,7 @@ final class GlRenderer {
      * {@code windowWidth x windowHeight} pixels.
      */
     void draw(int windowWidth, int windowHeight) {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, windowWidth, windowHeight);
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -126,26 +173,44 @@ final class GlRenderer {
         int y = (windowHeight - height) / 2;
         glViewport(x, y, width, height);
 
-        int program = showingRgb ? rgbProgram : sharpProgram;
+        int program = showingNtsc ? presentProgram : sharpProgram;
         glUseProgram(program);
         glUniform1i(glGetUniformLocation(program, "picture"), 0);
         glUniform4f(glGetUniformLocation(program, "viewport"), x, y, width, height);
-        if (!showingRgb) {
+        if (!showingNtsc) {
             glUniform2i(glGetUniformLocation(program, "pictureSize"), pictureWidth, pictureHeight);
         }
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, showingRgb ? rgbTexture : rawTexture);
+        glBindTexture(GL_TEXTURE_2D, showingNtsc ? ntscPictureTexture : rawTexture);
         glBindVertexArray(emptyVertexArray);
         glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
+
+    /**
+     * Reads back the last NTSC pass's output as 0xRRGGBB, row 0 at the top, for tests that
+     * compare it with the Java filter.
+     */
+    int[] readNtscPicture() {
+        int[] pixels = new int[ntscWidth * ntscHeight];
+        glBindFramebuffer(GL_FRAMEBUFFER, ntscFramebuffer);
+        glReadPixels(0, 0, ntscWidth, ntscHeight, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pixels);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        for (int i = 0; i < pixels.length; i++) {
+            pixels[i] &= 0xFFFFFF; // drop alpha
+        }
+        return pixels;
     }
 
     /** Frees the OpenGL objects. */
     void delete() {
         glDeleteProgram(sharpProgram);
-        glDeleteProgram(rgbProgram);
+        glDeleteProgram(ntscProgram);
+        glDeleteProgram(presentProgram);
         glDeleteVertexArrays(emptyVertexArray);
+        glDeleteFramebuffers(ntscFramebuffer);
         glDeleteTextures(rawTexture);
-        glDeleteTextures(rgbTexture);
+        glDeleteTextures(ntscTableTexture);
+        glDeleteTextures(ntscPictureTexture);
     }
 
     private static int createTexture(int filter) {

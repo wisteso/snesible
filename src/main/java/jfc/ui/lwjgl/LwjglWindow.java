@@ -15,7 +15,6 @@ import jfc.ui.InputSource;
 import jfc.ui.PacingMode;
 import jfc.ui.PlayOptions;
 import jfc.ui.VideoSink;
-import jfc.ui.video.VideoFilter;
 import jfc.ui.video.VideoMode;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.glfw.Callbacks;
@@ -70,10 +69,9 @@ public final class LwjglWindow implements VideoSink {
     private GlRenderer renderer;
     private Runnable rescanDevices = () -> System.out.println("Gamepads aren't supported here.");
 
-    // Picture mode (changed with F2/F3) and the filter that draws it.
+    // Picture mode, changed with F2/F3.
     private VideoMode mode;
     private boolean scanlines;
-    private VideoFilter filter;
 
     // Pacing: VSYNC (one frame every refreshesPerFrame swaps) or CLOCK.
     private PacingMode pacing = PacingMode.CLOCK;
@@ -290,13 +288,10 @@ public final class LwjglWindow implements VideoSink {
     // VideoSink
     // =============================================================================================
 
-    /** Uploads the frame (through the NTSC filter, in an NTSC mode). Called on the main thread. */
+    /** Uploads the frame (and, in an NTSC mode, runs the NTSC shader). Called on the main thread. */
     @Override
     public void present(Frame frame) {
-        if (filter == null || filter.mode() != mode || filter.scanlines() != scanlines) {
-            filter = new VideoFilter(mode, scanlines);
-        }
-        renderer.upload(frame, filter);
+        renderer.upload(frame, mode, scanlines);
     }
 
     @Override

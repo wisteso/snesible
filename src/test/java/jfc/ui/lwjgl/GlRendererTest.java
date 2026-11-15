@@ -1,10 +1,12 @@
 package jfc.ui.lwjgl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL33C.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
 
+import java.util.Random;
 import jfc.ui.Frame;
 import jfc.ui.video.SnesColor;
 import jfc.ui.video.VideoFilter;
@@ -16,8 +18,9 @@ import org.junit.jupiter.api.Test;
 import org.lwjgl.opengl.GL;
 
 /**
- * Draws frames through the real OpenGL pipeline in a hidden window and reads the pixels back.
- * Skipped on machines without OpenGL 3.3 (a build server, say).
+ * Draws frames through the real OpenGL pipeline in a hidden window and reads the pixels back:
+ * the GPU must produce exactly what the Java code does. Skipped on machines without OpenGL 3.3
+ * (a build server, say).
  */
 class GlRendererTest {
 
@@ -66,7 +69,7 @@ class GlRendererTest {
                 pixels[y * 256 + x] = SnesColor.pack(color, brightness);
             }
         }
-        renderer.upload(new Frame(pixels, 256, 224, 1), new VideoFilter(VideoMode.SHARP, false));
+        renderer.upload(new Frame(pixels, 256, 224, 1), VideoMode.SHARP, false);
         int[] drawn = drawAndRead(256, 224);
         for (int y = 0; y < 224; y++) {
             for (int x = 0; x < 256; x++) {
@@ -78,18 +81,50 @@ class GlRendererTest {
     }
 
     @Test
-    void theNtscPictureIsDrawnAsFiltered() {
-        // A flat color, so smooth scaling can't change it: the window must show what the
-        // Java filter made.
+    void theNtscShaderMatchesTheJavaFilterExactly() {
+        // Random colors and brightness, plus solid runs and fine stripes, which bring out the
+        // artifacts. All three burst phases (frames 1-3), with and without scanlines, for the
+        // composite, S-Video and RF setups.
+        int[] pixels = testPicture();
+        for (VideoMode mode : new VideoMode[] {VideoMode.COMPOSITE, VideoMode.SVIDEO, VideoMode.RF}) {
+            for (boolean scanlines : new boolean[] {false, true}) {
+                VideoFilter java = new VideoFilter(mode, scanlines);
+                for (long frameNumber = 1; frameNumber <= 3; frameNumber++) {
+                    Frame frame = new Frame(pixels, 256, 224, frameNumber);
+                    renderer.upload(frame, mode, scanlines);
+                    int[] gpu = renderer.readNtscPicture();
+                    int[] expected = new int[602 * 448];
+                    java.apply(frame, expected);
+                    assertEquals(expected.length, gpu.length);
+                    for (int i = 0; i < expected.length; i++) {
+                        if (expected[i] != gpu[i]) {
+                            fail(String.format("%s, scanlines %b, frame %d: pixel %d,%d is %06X on the GPU, %06X in Java",
+                                    mode, scanlines, frameNumber, i % 602, i / 602, gpu[i], expected[i]));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static int[] testPicture() {
+        Random random = new Random(1234);
         int[] pixels = new int[256 * 239];
-        java.util.Arrays.fill(pixels, SnesColor.pack(0x2A6B, 15));
-        VideoFilter composite = new VideoFilter(VideoMode.COMPOSITE, false);
-        Frame frame = new Frame(pixels, 256, 224, 1);
-        renderer.upload(frame, composite);
-        int[] expected = new int[602 * 448];
-        composite.apply(frame, expected);
-        int[] drawn = drawAndRead(602, 448);
-        assertEquals(expected[224 * 602 + 300], drawn[224 * 602 + 300] & 0xFFFFFF);
+        for (int y = 0; y < 224; y++) {
+            for (int x = 0; x < 256; x++) {
+                int color;
+                if (y < 80) {
+                    color = random.nextInt(0x8000); // noise
+                } else if (y < 150) {
+                    color = x % 2 == 0 ? 0x7FFF : 0; // one-pixel stripes
+                } else {
+                    color = (x / 16) * 0x0842 & 0x7FFF; // wide bands
+                }
+                int brightness = y < 200 ? 15 : random.nextInt(16);
+                pixels[y * 256 + x] = SnesColor.pack(color, brightness);
+            }
+        }
+        return pixels;
     }
 
     /** Draws into the window's framebuffer at the given size and reads it back as 0xAARRGGBB. */
