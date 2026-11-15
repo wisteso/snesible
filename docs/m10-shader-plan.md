@@ -1,6 +1,8 @@
 # Milestone 10 plan: LWJGL video, NTSC filter, CRT shaders
 
-Status: **agreed** (2026-11-15); 10a, 10b and 10c done on `m10-video`. The user's decisions are at the bottom. Work happens on the
+Status: **agreed** (2026-11-15); 10a, 10b, 10c, 10d and 10f done on `m10-video`; 10e (CRT)
+deferred by the user. In the OpenGL window NTSC runs only on the GPU (the user saw no use for
+the CPU path there); the Java filter remains for Swing and screenshots. The user's decisions are at the bottom. Work happens on the
 `m10-video` branch, in its own worktree, while emulation work continues on `main`.
 
 ## Goals

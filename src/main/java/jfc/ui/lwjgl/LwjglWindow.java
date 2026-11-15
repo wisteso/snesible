@@ -1,10 +1,10 @@
 package jfc.ui.lwjgl;
 
 import static org.lwjgl.glfw.GLFW.*;
+import static org.lwjgl.opengl.GL11C.glFinish;
 import static org.lwjgl.system.MemoryUtil.NULL;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import jfc.core.system.Snes;
@@ -15,6 +15,7 @@ import jfc.ui.InputSource;
 import jfc.ui.PacingMode;
 import jfc.ui.PlayOptions;
 import jfc.ui.VideoSink;
+import jfc.ui.input.GamepadMapping;
 import jfc.ui.video.VideoMode;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.glfw.Callbacks;
@@ -53,21 +54,29 @@ import org.lwjgl.system.Configuration;
  * measurement is repeated when the window moves to another monitor or goes fullscreen.
  *
  * <p>Keys: the controller keys (see {@link GlfwKeyboard}), F2 = next picture mode,
- * F3 = NTSC scanlines, F9 = look for new gamepads, F11 = fullscreen, Escape = quit.
+ * F3 = NTSC scanlines, F11 = fullscreen, Escape = quit. Gamepads come and go by themselves
+ * ({@link GlfwGamepads}).
  */
 public final class LwjglWindow implements VideoSink {
 
     private static final int SCALE = 3;
     /** Swaps timed to measure the display's refresh interval (the first few are ignored). */
-    private static final int MEASURE_SWAPS = 36;
-    private static final int MEASURE_SKIP = 6;
+    private static final int MEASURE_SWAPS = 60;
+    /**
+     * Right after a window appears, or a fullscreen switch, the first swaps can return without
+     * waiting (the window isn't on screen yet, the driver's queue of frames isn't full), so the
+     * first ones aren't counted.
+     */
+    private static final int MEASURE_SKIP = 20;
+    /** If vsync seems not to work, measure again this much later, up to this many times. */
+    private static final long RECHECK_DELAY_NANOS = 2_000_000_000L;
+    private static final int MAX_RECHECKS = 3;
 
     private final String title;
     private final PlayOptions options;
     private final GlfwKeyboard keyboard = new GlfwKeyboard();
     private long window;
     private GlRenderer renderer;
-    private Runnable rescanDevices = () -> System.out.println("Gamepads aren't supported here.");
 
     // Picture mode, changed with F2/F3.
     private VideoMode mode;
@@ -80,6 +89,8 @@ public final class LwjglWindow implements VideoSink {
     private FrameClock clock;
     private double measuredRefresh;
     private boolean pacingNeedsCheck = true;
+    private long recheckAt;   // System.nanoTime() of a scheduled re-measurement, or 0
+    private int recheckCount;
     private long monitorAtLastCheck = NULL;
 
     // The windowed position and size, restored when leaving fullscreen.
@@ -118,17 +129,14 @@ public final class LwjglWindow implements VideoSink {
 
     /**
      * Plays the game until the window closes, then writes the save and closes the window.
+     * Controller 1 is the keyboard plus the first gamepad; controller 2 the second gamepad.
      *
-     * @param saveFile      where battery-backed SRAM is kept, or null
-     * @param extraInputs   input sources besides the keyboard (gamepads)
-     * @param rescanDevices what F9 does (look for new gamepads), or null
+     * @param saveFile where battery-backed SRAM is kept, or null
+     * @param mapping  button mapping for gamepads that aren't in GLFW's gamepad database
      */
-    public void play(Snes snes, Path saveFile, List<InputSource> extraInputs, Runnable rescanDevices) {
-        if (rescanDevices != null) {
-            this.rescanDevices = rescanDevices;
-        }
-        List<InputSource> inputs = new ArrayList<>(List.of(keyboard));
-        inputs.addAll(extraInputs);
+    public void play(Snes snes, Path saveFile, GamepadMapping mapping) {
+        GlfwGamepads gamepads = new GlfwGamepads(mapping);
+        List<InputSource> inputs = List.of(keyboard, gamepads);
         EmulationSession session = new EmulationSession(snes, saveFile, this, inputs);
         session.setPrintStats(options.stats());
         try {
@@ -137,6 +145,7 @@ public final class LwjglWindow implements VideoSink {
             loop(session);
             session.powerOff();
         } finally {
+            gamepads.close();
             renderer.delete();
             Callbacks.glfwFreeCallbacks(window);
             glfwDestroyWindow(window);
@@ -200,6 +209,10 @@ public final class LwjglWindow implements VideoSink {
     private void loop(EmulationSession session) {
         double fps = session.framesPerSecond();
         while (!glfwWindowShouldClose(window)) {
+            if (recheckAt != 0 && System.nanoTime() - recheckAt >= 0) {
+                recheckAt = 0;
+                pacingNeedsCheck = true;
+            }
             if (pacingNeedsCheck) {
                 choosePacing(fps);
             }
@@ -251,9 +264,17 @@ public final class LwjglWindow implements VideoSink {
         refreshCounter = 0;
         clock = null; // a fresh timeline when the clock is next needed
 
+        if (!vsyncWorks && recheckCount < MAX_RECHECKS) {
+            recheckCount++;
+            recheckAt = System.nanoTime() + RECHECK_DELAY_NANOS; // perhaps it was just too early
+        } else if (vsyncWorks) {
+            recheckCount = 0;
+        }
         String display = vsyncWorks
                 ? String.format("%.2f Hz", measuredRefresh)
-                : "vsync isn't taking effect (is it forced off in the graphics driver?)";
+                : String.format("swaps came %.0f times a second, so vsync isn't taking effect"
+                        + " (is it forced off in the graphics driver?)%s", measuredRefresh,
+                        recheckAt != 0 ? "; measuring again shortly" : "");
         if (chosen == PacingMode.VSYNC) {
             System.out.printf("Display: %s. Pacing: locked to vsync, one frame every %d refresh%s (%.2f fps).%n",
                     display, refreshesPerFrame, refreshesPerFrame == 1 ? "" : "es", measuredRefresh / refreshesPerFrame);
@@ -273,6 +294,7 @@ public final class LwjglWindow implements VideoSink {
         for (int i = 0; i < MEASURE_SWAPS; i++) {
             glfwPollEvents();
             drawAndSwap();
+            glFinish(); // wait until the swap has really happened, not just been queued
             long now = System.nanoTime();
             if (i >= MEASURE_SKIP) {
                 intervals[i - MEASURE_SKIP] = now - previous;
@@ -322,8 +344,7 @@ public final class LwjglWindow implements VideoSink {
                     return;
                 }
                 case GLFW_KEY_F9 -> {
-                    System.out.println("Looking for gamepads...");
-                    rescanDevices.run();
+                    System.out.println("This window notices gamepads by itself; no need to search.");
                     return;
                 }
                 case GLFW_KEY_F11 -> {

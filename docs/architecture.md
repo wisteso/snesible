@@ -30,9 +30,9 @@ headless tools. `jfc.Main` only reads the command line and starts one of them.
 | `jfc.ui.video`  | Turning PPU pixels into a picture: plain RGB, or the NTSC filter | `SnesColor`, `VideoFilter`, `VideoMode` |
 | `jfc.ui.video.ntsc` | Java port of Blargg's `snes_ntsc` (**LGPL 2.1+**, kept separate) | `SnesNtsc`, `NtscSetup` |
 | `jfc.ui.input`  | Gamepad button mapping, shared by every gamepad reader | `GamepadMapping`, `JoystickState` |
-| `jfc.ui.input.winmm` | Windows gamepads through winmm.dll (an `InputSource`) | `Gamepads`, `WinmmJoysticks` |
+| `jfc.ui.input.winmm` | Windows gamepads through winmm.dll for the Swing window (an `InputSource`; F9 rescans) | `Gamepads`, `WinmmJoysticks` |
 | `jfc.ui.swing`  | The Swing window (a `VideoSink`) and its keyboard; `--swing`, and the fallback | `SwingWindow`, `SwingKeyboard` |
-| `jfc.ui.lwjgl`  | The OpenGL window (GLFW via LWJGL, the default): drawing, keyboard, pacing to the display | `LwjglWindow`, `GlRenderer`, `GlfwKeyboard`, `PacingDecision` |
+| `jfc.ui.lwjgl`  | The OpenGL window (GLFW via LWJGL, the default): drawing (NTSC on the GPU), keyboard, gamepads, pacing to the display | `LwjglWindow`, `GlRenderer`, `GlfwKeyboard`, `GlfwGamepads`, `PacingDecision` |
 
 ## Timing model: "the CPU drives everything"
 
@@ -161,10 +161,22 @@ After a pause (window drag, display measurement, fullscreen switch) the buffer i
 with silence instead of creeping back. Measured with `--stats`: frame gaps 16.0-17.5 ms, the
 buffer settling at ~50%, nothing dropped.
 
+**Gamepads (`GlfwGamepads`)**: read through GLFW on the main thread; GLFW's joystick callback
+reports pads being plugged in or out, so nothing is ever searched for. Pads in SDL's
+controller database (bundled with GLFW) use their standard layout, mapped by position (bottom
+face button = SNES B, right = A, left = Y, top = X); others, like the user's Buffalo pad, go
+through `GamepadMapping` (`gamepad.properties`) as with winmm.
+
 **Rendering (`GlRenderer`)**: sharp pixels upload the raw 19-bit PPU values into a `GL_R32UI`
 texture and `snes-pixels.frag` converts them with the same integer maths as `SnesColor`
-(`GlRendererTest` reads the pixels back and compares all of them). NTSC modes upload the Java
-filter's RGB output and scale it bilinearly. Shaders live in
+(`GlRendererTest` reads the pixels back and compares all of them). NTSC modes run on the GPU
+in two passes: `snes-ntsc.frag` (a GLSL port of `snes_ntsc`'s filtering step, LGPL) renders the
+602 x 448 picture into a framebuffer texture once per frame, one fragment per output pixel
+summing six precomputed smears with the same packed integer maths as `SnesNtsc.blit`; then
+`rgb-picture.frag` scales it to the window bilinearly. The table of smears is still built by
+`SnesNtsc` in Java when the mode changes (~25 ms) and uploaded as a 128 x 8192 `GL_R32UI`
+texture. `GlRendererTest` checks the GPU output equals the Java filter's for every pixel
+(three setups, all burst phases, scanlines on and off). Shaders live in
 `src/main/resources/jfc/ui/lwjgl/shaders/`. LWJGL is told to use its FFM memory backend
 (`Configuration.MEMORY_BACKEND = "ffm"`), which avoids the JVM's `sun.misc.Unsafe` warnings.
 
@@ -187,6 +199,5 @@ So `InterruptControl` is created first and then `interrupts.connect(cpu)` once t
 
 ## Planned direction
 
-Milestone 10 continues (see `docs/m10-shader-plan.md`): 10d moves the NTSC filter onto the
-GPU as shader passes, 10e adds a CRT pass, 10f reads gamepads through GLFW in the OpenGL
-window. The core (`jfc.core`) must not depend on Swing or LWJGL (`CoreBoundaryTest`).
+Milestone 10's remaining step (see `docs/m10-shader-plan.md`) is 10e, a CRT pass (beam
+profile, mask, gamma, curvature), which would follow the NTSC pass as a third shader. The core (`jfc.core`) must not depend on Swing or LWJGL (`CoreBoundaryTest`).

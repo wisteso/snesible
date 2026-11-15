@@ -116,9 +116,7 @@ public final class Main {
         String title = cart.header().title();
         Path saveFile = cart.header().hasBattery() ? Cartridge.saveFileFor(romFile) : null;
         System.out.println(Controls.HELP);
-        Gamepads gamepads = Gamepads.open(GamepadMapping.load(GAMEPAD_MAPPING_FILE)).orElse(null);
-        List<InputSource> gamepadInputs = gamepads == null ? List.of() : List.of(gamepads);
-        Runnable rescan = gamepads == null ? null : gamepads::requestRescan;
+        GamepadMapping mapping = GamepadMapping.load(GAMEPAD_MAPPING_FILE);
 
         if (!swing) {
             LwjglWindow window = null;
@@ -132,10 +130,14 @@ public final class Main {
                         + "); using the Swing window instead.");
             }
             if (window != null) {
-                window.play(new Snes(cart), saveFile, gamepadInputs, rescan); // returns when closed
+                window.play(new Snes(cart), saveFile, mapping); // gamepads through GLFW; returns when closed
                 return;
             }
         }
+        // The Swing window reads gamepads through Windows' winmm (none elsewhere, for now).
+        Gamepads gamepads = Gamepads.open(mapping).orElse(null);
+        List<InputSource> gamepadInputs = gamepads == null ? List.of() : List.of(gamepads);
+        Runnable rescan = gamepads == null ? null : gamepads::requestRescan;
         SwingWindow.play(new Snes(cart), title, saveFile, gamepadInputs, rescan, playOptions);
     }
 }
