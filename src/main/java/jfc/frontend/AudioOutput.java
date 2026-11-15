@@ -1,4 +1,4 @@
-package jfc.ui;
+package jfc.frontend;
 
 import java.util.Optional;
 import javax.sound.sampled.AudioFormat;

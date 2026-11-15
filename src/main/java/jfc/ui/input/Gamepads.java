@@ -3,6 +3,7 @@ package jfc.ui.input;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import jfc.frontend.InputSource;
 
 /**
  * The connected gamepads, polled once per frame.
@@ -11,10 +12,11 @@ import java.util.Optional;
  * in or out while the emulator runs: when fewer than two are connected, it looks for new ones
  * every couple of seconds.
  *
- * <p>This class and {@link WinmmJoysticks} are the only code that knows how gamepads are read.
- * Switching to another input library means replacing them, nothing else.
+ * <p>This class and {@link WinmmJoysticks} are the only code that knows how gamepads are read
+ * through Windows' winmm. It's an {@link InputSource}, so the emulation session polls it the
+ * same way as the keyboard.
  */
-public final class Gamepads {
+public final class Gamepads implements InputSource {
 
     private static final int RESCAN_INTERVAL_FRAMES = 120;
     private static final int MAX_PLAYERS = 2;
@@ -39,6 +41,7 @@ public final class Gamepads {
      *
      * @param buttonsPerPlayer filled with each player's SNES buttons (0 when no pad)
      */
+    @Override
     public void poll(int[] buttonsPerPlayer) {
         if (devices.size() < MAX_PLAYERS && --framesUntilRescan <= 0) {
             rescan();
