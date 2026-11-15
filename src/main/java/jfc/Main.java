@@ -2,12 +2,16 @@ package jfc;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import jfc.cartridge.Cartridge;
 import jfc.cartridge.CartridgeHeader;
 import jfc.coprocessor.Coprocessors;
 import jfc.cpu.Registers;
+import jfc.frontend.EmulationSession;
+import jfc.frontend.InputSource;
 import jfc.system.Snes;
 import jfc.ui.EmulatorWindow;
 import jfc.ui.input.GamepadMapping;
@@ -29,7 +33,14 @@ public final class Main {
             System.out.println(EmulatorWindow.CONTROLS_HELP);
             Gamepads gamepads = Gamepads.open(GamepadMapping.load(GAMEPAD_MAPPING_FILE)).orElse(null);
             Path saveFile = cart.header().hasBattery() ? Cartridge.saveFileFor(romFile) : null;
-            new EmulatorWindow(new Snes(cart), cart.header().title(), saveFile, gamepads).start();
+            EmulatorWindow window = new EmulatorWindow(cart.header().title());
+            List<InputSource> inputs = new ArrayList<>(List.of(window.keyboard()));
+            if (gamepads != null) {
+                inputs.add(gamepads);
+            }
+            EmulationSession session = new EmulationSession(new Snes(cart), saveFile, window, inputs);
+            window.open(session::stop);
+            session.start();
             return;
         }
         if (args.length == 1 && args[0].equals("--gamepad-test")) {
