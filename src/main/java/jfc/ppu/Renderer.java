@@ -16,7 +16,9 @@ import java.util.Arrays;
  *   <li><b>Color math:</b> each main screen pixel may be added to or subtracted from the sub
  *       screen pixel (or a fixed color), optionally halved. This gives transparency, shadows,
  *       fades and colored gradients.</li>
- *   <li><b>Brightness:</b> the master brightness scales the final color.</li>
+ *   <li><b>Brightness:</b> the master brightness is stored next to the final color. Each
+ *       frame-buffer pixel is {@code brightness << 15 | bgr15}; the display side
+ *       ({@code jfc.video.SnesColor}) turns that into RGB.</li>
  * </ol>
  *
  * <h2>Background modes</h2>
@@ -36,6 +38,9 @@ import java.util.Arrays;
  * yet, so modes 5 and 6 draw as 256-pixel layers, and mode 6 ignores its offset table.</i>
  */
 final class Renderer {
+
+    /** Where the master brightness sits in a frame-buffer pixel (above the 15-bit color). */
+    static final int BRIGHTNESS_SHIFT = 15;
 
     /** Enough lines for overscan mode. */
     static final int MAX_LINES = 239;
@@ -96,12 +101,8 @@ final class Renderer {
     private final int[] subSource = new int[WIDTH];
     private final int[] subColor = new int[WIDTH];
 
-    /** Precomputed 15-bit color to 24-bit RGB, for each of the 16 brightness levels. */
-    private final int[][] colorTable = new int[16][1 << 15];
-
     Renderer(Ppu ppu) {
         this.ppu = ppu;
-        buildColorTable();
     }
 
     int[] frameBuffer() {
@@ -122,9 +123,9 @@ final class Renderer {
         resolveScreen(order, ppu.mainScreenLayers, ppu.mainScreenWindowedLayers, mainSource, mainColor);
         resolveScreen(order, ppu.subScreenLayers, ppu.subScreenWindowedLayers, subSource, subColor);
 
-        int[] toRgb = colorTable[ppu.brightness];
+        int brightnessBits = ppu.brightness << BRIGHTNESS_SHIFT;
         for (int x = 0; x < WIDTH; x++) {
-            frameBuffer[rowStart + x] = toRgb[applyColorMath(x)];
+            frameBuffer[rowStart + x] = brightnessBits | applyColorMath(x);
         }
     }
 
@@ -325,25 +326,11 @@ final class Renderer {
     }
 
     // =============================================================================================
-    // Step 5: brightness and conversion to RGB
+    // Step 5: brightness
     // =============================================================================================
-
-    /**
-     * SNES colors are 5 bits per channel. To get 8 bits we copy the top 3 bits into the bottom,
-     * so 0 maps to 0 and 31 to 255. Master brightness then scales linearly.
-     */
-    private void buildColorTable() {
-        for (int brightness = 0; brightness < 16; brightness++) {
-            for (int color = 0; color < (1 << 15); color++) {
-                int r = expand(color & 0x1F) * brightness / 15;
-                int g = expand((color >> 5) & 0x1F) * brightness / 15;
-                int b = expand((color >> 10) & 0x1F) * brightness / 15;
-                colorTable[brightness][color] = (r << 16) | (g << 8) | b;
-            }
-        }
-    }
-
-    private static int expand(int fiveBits) {
-        return (fiveBits << 3) | (fiveBits >> 2);
-    }
+    //
+    // The PPU's work ends with a 15-bit color and the master brightness that applies to it. On
+    // the console, the video circuitry turns those into analog voltages; here, turning them into
+    // a PC's RGB (or into a simulated NTSC signal) is the display's job (jfc.video.SnesColor).
+    // So the frame buffer stores both, packed as  brightness << 15 | bgr15.
 }

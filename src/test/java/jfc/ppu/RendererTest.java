@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import jfc.system.MasterClock;
+import jfc.video.SnesColor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -306,6 +307,6 @@ class RendererTest {
     }
 
     private int pixel(int x, int y) {
-        return ppu.frameBuffer()[y * 256 + x];
+        return SnesColor.toRgb(ppu.frameBuffer()[y * 256 + x]);
     }
 }

@@ -184,7 +184,11 @@ public final class Ppu {
         return bgMode;
     }
 
-    /** The finished picture: 256 x {@link Renderer#MAX_LINES} pixels as 0xRRGGBB. */
+    /**
+     * The finished picture: 256 x {@link Renderer#MAX_LINES} pixels. Each is the PPU's raw
+     * output, {@code brightness << 15 | bgr15} (master brightness 0-15 above a 15-bit color);
+     * {@code jfc.video.SnesColor} turns it into RGB.
+     */
     public int[] frameBuffer() {
         return renderer.frameBuffer();
     }
