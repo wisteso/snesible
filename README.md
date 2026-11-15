@@ -24,9 +24,11 @@ perfectly smoothly. `--swing` uses the simpler Swing window instead (also the au
 fallback without OpenGL 3.3); `--pacing vsync|clock` overrides the choice, `--refresh <hz>` asks
 for a refresh rate in fullscreen, and `--stats` prints timing each second.
 
-Gamepads (Windows only for now): the first pad plays as controller 1 alongside the keyboard,
-a second as controller 2. Pads are found at startup; after plugging one in later, press F9 to
-look for it (JFC doesn't look automatically, because each search stalls the game briefly). If the face buttons are mixed up, run `--gamepad-test`, press each
+Gamepads: the first pad plays as controller 1 alongside the keyboard, a second as controller
+2. In the OpenGL window they work on any platform and can be plugged in or out at any time;
+pads GLFW knows (Xbox, PlayStation, Switch Pro, ...) use their standard layout, by position.
+The Swing window reads them through Windows' winmm only, finds them at startup, and looks
+for newly plugged-in ones when you press F9 (each search stalls the game briefly). If the face buttons are mixed up, run `--gamepad-test`, press each
 button to see its number, and put the numbers in a `gamepad.properties` file in the working
 directory:
 
@@ -117,9 +119,9 @@ mvn test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
 7. ~~Real APU: SPC700 and DSP audio~~
 8. Debug and state-viewer tools
 
-In progress (Milestone 10): an NTSC TV filter (done, in Java) and an OpenGL window with
-display-synchronized pacing (done); next, the NTSC filter as GPU shaders, a CRT shader, and
-cross-platform gamepads through GLFW.
+Milestone 10 (mostly done): an NTSC TV filter (in Java for Swing and screenshots, as a shader
+in the OpenGL window), an OpenGL window with display-synchronized pacing, and cross-platform
+gamepads through GLFW. A CRT shader is next.
 
 ## Licensing note
 

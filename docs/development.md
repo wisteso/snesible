@@ -46,14 +46,15 @@ failure details.
 | `SnesTest` | memory map, access timing, frame length, NMI, V-IRQ, DMA, HDMA incl. mid-frame enable (hand-assembled programs) |
 | `PpuPortsTest`, `RendererTest`, `EffectsTest` | VRAM/CGRAM/OAM ports, layers, sprites, priorities, color math, windows, Mode 7, mosaic, offset-per-tile |
 | `ApuTest`, `DspTest` | boot ROM upload protocol, timers, voice playback, ENDX, key off |
-| `GlRendererTest` | the OpenGL path in a hidden window: every pixel matches `SnesColor`; the NTSC picture is drawn as filtered (skipped without OpenGL 3.3) |
+| `GlRendererTest` | the OpenGL path in a hidden window: sharp pixels match `SnesColor` and the NTSC shader matches the Java filter, for every pixel (skipped without OpenGL 3.3) |
+| `GlfwGamepadsTest` | standard-layout gamepads map by position; triggers, stick, hat angles |
 | `PacingDecisionTest` | which pacing the OpenGL window picks for 60, 59.94, 120, 144 Hz, PAL, broken vsync |
 | `AudioResamplerTest` | dynamic rate control: exact at ratio 1, the right length at 1.005, no clicks between chunks |
 | `CoreBoundaryTest` | `jfc.core` imports no Swing, AWT, LWJGL, `jfc.ui` or `jfc.tools` |
 | `VideoFilterTest` | sharp-pixel conversion; NTSC filter: size, flat colors, composite vs S-Video artifacts, burst phase per line and frame, scanlines, brightness |
 | `ArithmeticUnitTest`, `JoypadPortsTest`, `GamepadMappingTest` | small units |
 
-The total is about 919 tests, taking about 10 s.
+The total is about 923 tests, taking about 10 s.
 
 ## Headless tools (essential for checking work without seeing or hearing it)
 
@@ -73,7 +74,9 @@ J="$JAVA_HOME/bin/java"
   crop and enlarge a region (a tiny scratch Java program) to see the artifacts.
 - To capture the real window, `CopyFromScreen` returns a blank white client area (Java2D
   draws through Direct3D). Use `PrintWindow(hwnd, hdc, 2)` from a DPI-aware PowerShell
-  (`SetProcessDPIAware`) instead; it works for the OpenGL window too, fullscreen included.
+  (`SetProcessDPIAware`) instead; it works for the OpenGL window too, fullscreen included,
+  but can block that window's drawing for seconds (one capture stalled a frame 6.8 s), so
+  don't capture during timing measurements. Zelda's title flashes white around frame 900.
 - To press keys in the window from PowerShell, `SendKeys` doesn't reach it; tap Alt with
   `keybd_event` (Windows then allows `SetForegroundWindow`), then send the key with
   `keybd_event`.

@@ -18,7 +18,7 @@ Last updated: 2026-11-11, Milestone 8 (SuperFX and SA-1).
 | 8 | Coprocessors: SuperFX (Star Fox, Yoshi's Island) and SA-1 (Super Mario RPG) | see git log | done; the user played all three ("pretty much perfectly") |
 | - | Offset-per-tile in modes 2 and 4 (Star Fox horizon); GSU background ROM/RAM buffers | see git log | done |
 | 9 | Debug and state-viewer tools (plan below) | - | planned |
-| 10 | Move video and input to LWJGL; CRT/NTSC shaders (plan: `m10-shader-plan.md`) | branch `m10-video` | in progress: 10a (frontend boundary, 15-bit frame buffer), 10b (Java NTSC filter) and 10c (package layout, OpenGL window, frame pacing) done; 10d-10f (GPU NTSC shaders, CRT pass, GLFW gamepads) to do |
+| 10 | Move video and input to LWJGL; CRT/NTSC shaders (plan: `m10-shader-plan.md`) | branch `m10-video` | in progress: 10a (frontend boundary, 15-bit frame buffer), 10b (Java NTSC filter), 10c (package layout, OpenGL window, frame pacing), 10d (NTSC on the GPU) and 10f (GLFW gamepads) done; 10e (CRT pass) deferred by the user |
 
 ## What the user has confirmed by playing
 
@@ -56,13 +56,26 @@ Each is documented where it lives in the code.
 - The boot ROM is a clean-room replacement (same protocol, different timing).
 
 **Other**
-- Gamepads are Windows-only (winmm) until 10f moves the OpenGL window to GLFW gamepads. Pads are found at startup and
+- The Swing window's gamepads are Windows-only (winmm). Pads are found at startup and
   when the user presses F9, as in Snes9x. Each search of an empty winmm slot stalls joystick
   calls ~160 ms; the old automatic search every 2 s froze the game that often. The user
   asked for on-demand only, since many SNES games are latency-sensitive.
 - Fixed in 10c: audio-paced frames used to arrive up to ~35 ms apart (the sound device frees
   buffer space in ~30 ms chunks). Frames are now paced by the display or a steady clock and
   the sound adapts (dynamic rate control); measured gaps 16.0-17.5 ms in both windows.
+
+**NTSC on the GPU (10d) and GLFW gamepads (10f)**
+- The OpenGL window's NTSC modes run a GLSL port of `snes_ntsc`'s filtering step; the output
+  equals the Java filter's for every pixel (`GlRendererTest`). Checked in the real window:
+  composite, S-Video and RGB at a steady 61 fps; a mode switch costs one ~25 ms frame.
+- GLFW sees the user's Buffalo pad as a raw joystick (8 buttons, 2 axes; not in SDL's
+  database), so it uses `GamepadMapping` with the defaults the user confirmed under winmm. It's
+  detected as controller 1, but button presses haven't been tested yet (the user was away);
+  if GLFW numbers the buttons differently from winmm, `gamepad.properties` fixes it.
+  `--gamepad-test` still reads winmm.
+- The refresh measurement once came out wrong right after the window appeared (swaps not
+  waiting yet); it now skips the first 20 swaps, waits for each with `glFinish`, and
+  re-measures after 2 s if vsync still looks off. Three launches then measured 143.65-144.02 Hz.
 
 **OpenGL window (10c)**
 - Verified on the user's machine (two 2560x1440 144 Hz G-Sync monitors, NVIDIA), driving it
