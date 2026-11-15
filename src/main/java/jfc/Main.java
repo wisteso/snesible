@@ -47,6 +47,7 @@ public final class Main {
             List<InputSource> inputs = new ArrayList<>(List.of(window.keyboard()));
             if (gamepads != null) {
                 inputs.add(gamepads);
+                window.onRescanDevices(gamepads::requestRescan);
             }
             EmulationSession session = new EmulationSession(new Snes(cart), saveFile, window, inputs);
             window.open(session::stop);
