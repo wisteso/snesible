@@ -46,9 +46,10 @@ failure details.
 | `SnesTest` | memory map, access timing, frame length, NMI, V-IRQ, DMA, HDMA incl. mid-frame enable (hand-assembled programs) |
 | `PpuPortsTest`, `RendererTest`, `EffectsTest` | VRAM/CGRAM/OAM ports, layers, sprites, priorities, color math, windows, Mode 7, mosaic, offset-per-tile |
 | `ApuTest`, `DspTest` | boot ROM upload protocol, timers, voice playback, ENDX, key off |
+| `VideoFilterTest` | sharp-pixel conversion; NTSC filter: size, flat colors, composite vs S-Video artifacts, burst phase per line and frame, scanlines, brightness |
 | `ArithmeticUnitTest`, `JoypadPortsTest`, `GamepadMappingTest` | small units |
 
-The total is about 849 tests, taking about 10 s.
+The total is about 905 tests, taking about 10 s.
 
 ## Headless tools (essential for checking work without seeing or hearing it)
 
@@ -57,12 +58,17 @@ J="$JAVA_HOME/bin/java"
 "$J" -cp target/classes jfc.Main --info roms/*                        # header dump
 "$J" -cp target/classes jfc.Main --run "roms/X.sfc" 600 START@320       # where the CPU spends time, BG mode
 "$J" -cp target/classes jfc.Main --screenshot "roms/X.sfc" 700 out.png START@320 A@600
+"$J" -cp target/classes jfc.Main --screenshot "roms/X.sfc" 700 out.png --video composite  # NTSC filter
 "$J" -cp target/classes jfc.Main --record-audio "roms/X.sfc" 1800 out.wav START@1300
 "$J" -jar target/jfc-0.1.0-SNAPSHOT.jar --gamepad-test                  # needs the user to press buttons
 "$J" -jar target/jfc-0.1.0-SNAPSHOT.jar "roms/X.sfc"                    # the real window (user-facing)
 ```
 
-- Read screenshot PNGs with the Read tool to check rendering.
+- Read screenshot PNGs with the Read tool to check rendering. NTSC screenshots are 602 x 448;
+  crop and enlarge a region (a tiny scratch Java program) to see the artifacts.
+- To capture the real window, `CopyFromScreen` returns a blank white client area (Java2D
+  draws through Direct3D). Use `PrintWindow(hwnd, hdc, 2)` from a DPI-aware PowerShell
+  (`SetProcessDPIAware`) instead.
 - Scripted presses hold for 6 frames. Useful SMW script: `START@320 START@450 START@600`
   reaches the opening message; it can be dismissed only after about frame 1450 (see
   hardware-notes).

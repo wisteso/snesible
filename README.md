@@ -13,7 +13,10 @@ java -jar target/jfc-0.1.0-SNAPSHOT.jar "roms/Super Mario World.sfc"
 ```
 
 Keys: arrows = D-pad, X = A, Z = B, S = X, A = Y, Q = L, W = R, Enter = Start,
-Shift/Backspace = Select, Escape = quit.
+Shift/Backspace = Select, Escape = quit. F2 cycles the picture mode (sharp pixels, or an NTSC
+TV filter for a composite, S-Video, RGB, black-and-white or RF connection) and F3 toggles NTSC
+scanlines. `--video composite` (or `svideo`, `rgb`, `monochrome`, `rf`) and `--scanlines` pick
+them at startup.
 
 Gamepads (Windows only for now): the first pad plays as controller 1 alongside the keyboard,
 a second as controller 2. If the face buttons are mixed up, run `--gamepad-test`, press each
@@ -43,8 +46,8 @@ java -jar target/jfc-0.1.0-SNAPSHOT.jar --record-audio "roms/A Link to the Past.
 ```
 
 `--info` prints cartridge headers. `--run` runs a game without video and reports where the CPU
-spends its time. `--screenshot` saves a frame as a PNG, and `--record-audio` saves the sound as a
-WAV file. The headless modes accept scripted button presses (`BUTTON@frame`).
+spends its time. `--screenshot` saves a frame as a PNG (add `--video composite` for the NTSC
+filter), and `--record-audio` saves the sound as a WAV file. The headless modes accept scripted button presses (`BUTTON@frame`).
 
 The APU's boot ROM isn't Nintendo's: it's a clean-room replacement speaking the same upload
 protocol (see `jfc.apu.BootRom`).
@@ -83,7 +86,10 @@ mvn test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
 | `jfc.ppu`       | Picture processor: backgrounds, sprites, Mode 7, windows, color math  |
 | `jfc.apu`       | Audio unit: SPC700 CPU, DSP, timers, boot ROM                         |
 | `jfc.system`    | The console: master clock, work RAM, and wiring it all together       |
-| `jfc.ui`        | Swing window, sound output, frame pacing and keyboard input          |
+| `jfc.frontend`  | Runs the console in real time: frame pacing, sound, saves, input      |
+| `jfc.video`     | Turns the PPU's pixels into a picture: plain RGB or the NTSC filter   |
+| `jfc.video.ntsc` | Java port of Blargg's snes_ntsc NTSC filter (LGPL 2.1+)              |
+| `jfc.ui`        | Swing window and keyboard input                                       |
 | `jfc.ui.input`  | Gamepads (winmm.dll through Java's Foreign Function API)             |
 
 ## Roadmap
@@ -97,4 +103,10 @@ mvn test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
 7. ~~Real APU: SPC700 and DSP audio~~
 8. Debug and state-viewer tools
 
-Later: move video and input to LWJGL, for cross-platform gamepads and CRT/NTSC shaders.
+In progress: an NTSC TV filter (done, in Java) and a move of video and input to LWJGL, for
+cross-platform gamepads and CRT shaders.
+
+## Licensing note
+
+The `jfc.video.ntsc` package is a port of Shay Green's (Blargg's) `snes_ntsc` library and is
+licensed under the GNU Lesser General Public License 2.1 or later, as the original is.

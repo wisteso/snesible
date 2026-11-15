@@ -20,8 +20,11 @@ piece in detail.
 | `jfc.coprocessor.sa1` | SA-1 | `Sa1` (board: both address maps, registers, interrupts, DMA, bit reader, catch-up), `SuperMmc` (ROM banking), `Sa1Arithmetic` |
 | `jfc.coprocessor.superfx` | SuperFX / GSU | `SuperFx` (board: both address maps, registers, catch-up), `Gsu` (the RISC core), `PlotUnit` (PLOT/RPIX), `GsuBus` |
 | `jfc.system`    | The console | `Snes` (wiring and frame loop), `MasterClock`, `WorkRam` |
-| `jfc.ui`        | Window, sound, frame pacing, keyboard | `EmulatorWindow`, `AudioOutput` |
-| `jfc.ui.input`  | Gamepads | `Gamepads`, `WinmmJoysticks`, `GamepadMapping`, `JoystickState` |
+| `jfc.frontend`  | Runs a console in real time behind a small UI boundary: frame loop, pacing, sound, saves, input polling | `EmulationSession`, `VideoSink`, `InputSource`, `Frame`, `AudioOutput` |
+| `jfc.video`     | Turning PPU pixels into a picture: plain RGB, or the NTSC filter | `SnesColor`, `VideoFilter`, `VideoMode` |
+| `jfc.video.ntsc` | Java port of Blargg's `snes_ntsc` (**LGPL 2.1+**, kept separate) | `SnesNtsc`, `NtscSetup` |
+| `jfc.ui`        | Swing window and keyboard (one `VideoSink`) | `EmulatorWindow` |
+| `jfc.ui.input`  | Gamepads through winmm (an `InputSource`) | `Gamepads`, `WinmmJoysticks`, `GamepadMapping`, `JoystickState` |
 
 ## Timing model: "the CPU drives everything"
 
@@ -114,18 +117,39 @@ the two CPUs closely interleaved.
 3. Resolve the **main** (TM/TMW) and **sub** (TS/TSW) screens using the per-mode priority
    tables in `Renderer` (`PRIORITY_ORDERS`, `MODE1_BG3_FRONT_ORDER`).
 4. Color math (CGWSEL/CGADSUB/COLDATA), in 15-bit color.
-5. Master brightness and 15-bit to RGB via a precomputed table.
+5. Master brightness: the frame buffer stores each pixel as `brightness << 15 | bgr15`. The
+   core stops there; turning that into RGB is the display's job (`jfc.video.SnesColor` for
+   plain RGB, `jfc.video.VideoFilter` for the NTSC filter), so a filter or shader gets the
+   exact SNES color even during fades.
 
-## Frame loop and threads (`EmulatorWindow`)
+## Frame loop and threads (`EmulationSession`)
 
-- **Emulation thread** (non-daemon, so it can write the final save on exit): poll gamepads, set
-  joypad state, `runFrame()`, copy the frame buffer into the image under a lock, drain the
-  audio and play it. `AudioOutput.play` blocks while the sound card's ~64 ms buffer is full,
-  and **that's what paces the emulator**. Without a sound device it falls back to sleeping
-  until each frame's deadline.
+The boundary between the console and any user interface is two interfaces in `jfc.frontend`:
+`VideoSink.present(Frame)` receives each finished picture and `InputSource.poll(int[])`
+supplies buttons. `EmulationSession` owns the `Snes` and runs it; the Swing window
+(`EmulatorWindow`) is one implementation, and the planned LWJGL window will be another.
+
+- **Emulation thread** (`EmulationSession`, non-daemon, so it can write the final save on
+  exit): poll every `InputSource` and OR their buttons per player, `runFrame()`, hand the
+  frame to the `VideoSink`, drain the audio and play it. `AudioOutput.play` blocks while the
+  sound card's ~64 ms buffer is full, and **that's what paces the emulator**. Without a sound
+  device it falls back to sleeping until each frame's deadline.
+- A `Frame`'s pixel array is the PPU's own buffer, valid only during `present()`. The Swing
+  window draws it through its current `VideoFilter` into an image under a lock.
 - **Swing event thread**: paints the image and turns keys into buttons through a global
-  `KeyEventDispatcher`, stored in an `AtomicInteger`.
+  `KeyEventDispatcher`, stored in an `AtomicInteger` (the keyboard `InputSource` reads it).
 - Battery SRAM is saved about once a second when changed, and on exit (atomic temp-file move).
+
+## NTSC filter (`jfc.video.ntsc`)
+
+A port of Blargg's `snes_ntsc` 0.2.2 that keeps the C code's packed-RGB arithmetic and float
+steps, so output should match Snes9x. It precomputes, for 8192 colors (4 bits red, 5 green,
+4 blue), the 14-pixel smear each produces at each of 3 burst phases and 3 positions in a
+3-pixel chunk (3 SNES pixels = 2 color subcarrier cycles), then filters a line by summing six
+smears per output pixel: 256 pixels become 602. Usage follows Snes9x on Windows: the burst
+phase steps 0, 1, 2 per frame (`frame.number() % 3`), each line is drawn twice (602 x 448),
+and the scanline option darkens every second row by 1/8. Master brightness is applied before
+filtering the way Snes9x does (`round(channel * brightness / 15)`).
 
 ## Construction order (`Snes` constructor)
 
@@ -135,7 +159,6 @@ So `InterruptControl` is created first and then `interrupts.connect(cpu)` once t
 
 ## Planned direction
 
-Later, video and input move to **LWJGL** (cross-platform gamepads, plus the chance of CRT/NTSC
-shaders). Keep the boundaries small: `EmulatorWindow`/`AudioOutput` for video and sound,
-`Gamepads`/`WinmmJoysticks` for input. The core (`jfc.system` and below) must not depend
-on Swing.
+Milestone 10 (in progress, see `docs/m10-shader-plan.md`) adds an **LWJGL** window as a second
+`VideoSink`, with GPU shaders and GLFW keyboard/gamepads, while the Swing window stays as a
+fallback. The core (`jfc.system` and below) must not depend on Swing or LWJGL.
