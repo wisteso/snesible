@@ -1,6 +1,7 @@
 # Project status
 
-Last updated: 2026-11-11, Milestone 8 (SuperFX and SA-1).
+Last updated: 2026-11-15, Milestone 10 on branch `m10-video` (not merged yet: the user wants to
+play-test first). The frontend code is explained in `frontend.md`.
 
 ## Milestones
 

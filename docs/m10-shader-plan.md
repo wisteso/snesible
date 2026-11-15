@@ -2,8 +2,12 @@
 
 Status: **agreed** (2026-11-15); 10a, 10b, 10c, 10d and 10f done on `m10-video`; 10e (CRT)
 deferred by the user. In the OpenGL window NTSC runs only on the GPU (the user saw no use for
-the CPU path there); the Java filter remains for Swing and screenshots. The user's decisions are at the bottom. Work happens on the
-`m10-video` branch, in its own worktree, while emulation work continues on `main`.
+the CPU path there); the Java filter remains for Swing and screenshots. The user's decisions
+are at the bottom. Work happens on the `m10-video` branch, in its own worktree, while emulation
+work continues on `main`.
+
+This is the plan as written before the code. **For how the code actually works, see
+`frontend.md`**; its last section lists where the implementation departed from this plan.
 
 ## Goals
 
