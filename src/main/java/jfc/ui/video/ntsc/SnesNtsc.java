@@ -454,6 +454,16 @@ public final class SnesNtsc {
     // Filtering
     // =============================================================================================
 
+    /**
+     * The precomputed smears, for running the filtering step elsewhere (the OpenGL window does
+     * it in a shader). Color index {@code c} (see {@link #entryFor}) and burst phase {@code p}
+     * occupy entries {@code c * 128 + p * 42} to {@code + 41}: 3 alignments x 14 packed RGB
+     * values. Read-only: the array is shared, not copied.
+     */
+    public int[] table() {
+        return table;
+    }
+
     /** Output width for a line of {@code inWidth} pixels (602 for 256). */
     public static int outWidth(int inWidth) {
         return ((inWidth - 1) / IN_CHUNK + 1) * OUT_CHUNK;

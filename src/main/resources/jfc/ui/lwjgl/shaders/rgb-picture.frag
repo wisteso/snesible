@@ -1,8 +1,7 @@
 #version 330 core
-// Draws an already-filtered RGB picture (the Java NTSC filter's 602 x 448 output), scaled to
-// the viewport with bilinear filtering. The NTSC picture already has fine horizontal detail,
-// so smooth scaling looks closer to a TV than repeating whole output pixels. (Milestone 10d
-// replaces this with the NTSC filter running on the graphics card.)
+// Draws the NTSC pass's output (snes-ntsc.frag's 602 x 448 picture, in a framebuffer texture)
+// into the window, scaled with bilinear filtering. The NTSC picture already has fine horizontal
+// detail, so smooth scaling looks closer to a TV than repeating whole output pixels.
 
 uniform sampler2D picture;    // RGBA8 texture exactly the picture's size, linear filtering
 uniform vec4 viewport;        // where the picture is drawn, in window pixels: x, y, width, height
