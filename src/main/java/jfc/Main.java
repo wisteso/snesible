@@ -16,6 +16,7 @@ import jfc.system.Snes;
 import jfc.ui.EmulatorWindow;
 import jfc.ui.input.GamepadMapping;
 import jfc.ui.input.Gamepads;
+import jfc.video.VideoMode;
 
 /** Command-line entry point. */
 public final class Main {
@@ -27,13 +28,22 @@ public final class Main {
     private static final Path GAMEPAD_MAPPING_FILE = Path.of("gamepad.properties");
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        if (args.length == 1 && !args[0].startsWith("--")) {
+        if (args.length >= 1 && !args[0].startsWith("--")) {
             Path romFile = Path.of(args[0]);
+            VideoMode mode = VideoMode.SHARP;
+            boolean scanlines = false;
+            for (int i = 1; i < args.length; i++) {
+                switch (args[i]) {
+                    case "--video" -> mode = VideoMode.parse(args[++i]);
+                    case "--scanlines" -> scanlines = true;
+                    default -> throw new IllegalArgumentException("Unknown option: " + args[i]);
+                }
+            }
             Cartridge cart = Cartridge.load(romFile);
             System.out.println(EmulatorWindow.CONTROLS_HELP);
             Gamepads gamepads = Gamepads.open(GamepadMapping.load(GAMEPAD_MAPPING_FILE)).orElse(null);
             Path saveFile = cart.header().hasBattery() ? Cartridge.saveFileFor(romFile) : null;
-            EmulatorWindow window = new EmulatorWindow(cart.header().title());
+            EmulatorWindow window = new EmulatorWindow(cart.header().title(), mode, scanlines);
             List<InputSource> inputs = new ArrayList<>(List.of(window.keyboard()));
             if (gamepads != null) {
                 inputs.add(gamepads);
@@ -71,12 +81,16 @@ public final class Main {
         }
         System.err.println("""
                 Usage:
-                  jfc <rom-file>                 Play a game in a window
+                  jfc <rom-file> [--video <mode>] [--scanlines]
+                                                 Play a game in a window. Modes: sharp
+                                                 (default), composite, svideo, rgb,
+                                                 monochrome, rf (NTSC TV filters)
                   jfc --gamepad-test             Show gamepad button numbers (for gamepad.properties)
                   jfc --info <rom-file>...       Print the cartridge header of each ROM
                   jfc --run <rom-file> [frames] [BUTTON@frame ...]
                                                  Run without video and report what the CPU does
                   jfc --screenshot <rom-file> <frames> <out.png> [BUTTON@frame ...]
+                                                 [--video <mode>] [--scanlines]
                                                  Run headless and save the last frame as a PNG,
                                                  pressing buttons (e.g. START@200) on the way
                   jfc --record-audio <rom-file> <frames> <out.wav> [BUTTON@frame ...]
