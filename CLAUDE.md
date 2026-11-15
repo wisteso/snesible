@@ -17,13 +17,14 @@ Read these before working on the project:
   `/c/dev/tools/apache-maven-3.9.6/bin/mvn -B package`.
 - **Heavy documentation**: Javadoc explaining the hardware, plus `//` comments on any
   non-obvious logic. The user asked for this explicitly.
-- Readability first, speed second. No runtime dependencies beyond the JDK (Gson is test-only);
-  Milestone 10 will add LWJGL for the frontend only.
+- Readability first, speed second. No runtime dependencies beyond the JDK (Gson is test-only),
+  except LWJGL, used only by `jfc.ui.lwjgl`. Run the OpenGL window with `java -jar` (LWJGL is
+  in `target/lib`); `java -cp target/classes` is fine for the headless tools.
 - `jfc.ui.video.ntsc` is a port of Blargg's `snes_ntsc` and stays LGPL 2.1+ with its notice;
   don't move other code into it.
 - Keep `jfc.core` (the console) free of Swing, AWT, LWJGL, `jfc.ui` and `jfc.tools`
   (`CoreBoundaryTest` checks it). Headless tools go in `jfc.tools`, only `Main` in `jfc`. UI and input sit behind small
-  boundaries for the planned LWJGL move.
+  boundaries (`VideoSink`, `InputSource`), so Swing and OpenGL windows share one core.
 - Verify with evidence: run the test suites, and use the headless `--run`, `--screenshot` and
   `--record-audio` modes (read PNGs with the Read tool). Don't claim a fix without checking it.
 - Commit at the end of each milestone with the `Co-Authored-By` trailer. Never commit `roms/`,

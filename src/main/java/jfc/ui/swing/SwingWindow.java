@@ -11,11 +11,17 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
+import jfc.core.system.Snes;
+import jfc.ui.EmulationSession;
 import jfc.ui.Frame;
 import jfc.ui.InputSource;
+import jfc.ui.PlayOptions;
 import jfc.ui.VideoSink;
 import jfc.ui.video.VideoFilter;
 import jfc.ui.video.VideoMode;
@@ -34,29 +40,14 @@ import jfc.ui.video.VideoMode;
  *       {@link SwingKeyboard}, which the emulation thread polls.</li>
  * </ul>
  *
- * <p>Keys: arrows = D-pad, X = A, Z = B, S = X, A = Y, Q = L, W = R, Enter = Start,
- * Shift or Backspace = Select, F2 = next picture mode (sharp pixels or one of the NTSC
- * filters), F3 = NTSC scanlines on/off, F9 = look for newly plugged-in gamepads,
- * Escape = quit.
+ * <p>Keys are listed in {@link jfc.ui.Controls}: the controller keys (see
+ * {@link SwingKeyboard}), F2 = next picture mode (sharp pixels or one of the NTSC filters),
+ * F3 = NTSC scanlines on/off, F9 = look for newly plugged-in gamepads, Escape = quit.
  *
  * <p>The window keeps the picture's shape when resized: 8:7 for sharp pixels (square SNES
  * pixels), and the NTSC filter's 602 x 448, which is close to a TV's 4:3.
  */
 public final class SwingWindow implements VideoSink {
-
-    /** Printed when the window opens, so the key mapping is easy to find. */
-    public static final String CONTROLS_HELP = """
-            Controls:
-              D-pad         Arrow keys
-              A / B         X / Z
-              X / Y         S / A
-              L / R         Q / W
-              Start         Enter
-              Select        Shift or Backspace
-              Picture mode  F2 (sharp pixels, NTSC composite, S-Video, RGB, ...)
-              Scanlines     F3 (with an NTSC mode)
-              Find gamepads F9 (after plugging one in)
-              Quit          Escape""";
 
     private static final int SCALE = 3;
 
@@ -80,6 +71,28 @@ public final class SwingWindow implements VideoSink {
 
     private JFrame frame;
     private Display display;
+
+    /**
+     * Opens a Swing window and starts playing on an emulation thread paced by a steady clock.
+     * Returns immediately; the game ends when the window closes.
+     *
+     * @param saveFile      where battery-backed SRAM is kept, or null
+     * @param extraInputs   input sources besides the keyboard (gamepads)
+     * @param rescanDevices what F9 does (look for new gamepads), or null
+     */
+    public static void play(Snes snes, String title, Path saveFile, List<InputSource> extraInputs,
+                            Runnable rescanDevices, PlayOptions options) {
+        SwingWindow window = new SwingWindow(title, options.videoMode(), options.scanlines());
+        List<InputSource> inputs = new ArrayList<>(List.of(window.keyboard()));
+        inputs.addAll(extraInputs);
+        if (rescanDevices != null) {
+            window.onRescanDevices(rescanDevices);
+        }
+        EmulationSession session = new EmulationSession(snes, saveFile, window, inputs);
+        session.setPrintStats(options.stats());
+        window.open(session::stop);
+        session.start();
+    }
 
     /**
      * @param mode      the picture mode to start with
