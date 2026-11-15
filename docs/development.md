@@ -84,6 +84,10 @@ J="$JAVA_HOME/bin/java"
   `java -cp "C:/dev/projects/JFC/target/classes;<scratch>/out" jfc.ppu.Diag` (absolute
   Windows-style classpath with `;`).
 - `Cpu.setInstructionListener` gives per-instruction hooks (PC histograms, per-line sampling).
+- **Window stutter**: wrap the `VideoSink` in a scratch harness that runs the real
+  `EmulationSession` and logs gaps between `present()` calls over 25 ms; time suspects
+  (input poll, audio write) the same way. GC logs (`-Xlog:gc`) ruled out garbage collection;
+  the cause was winmm stalling ~160 ms on queries of empty joystick slots (see `Gamepads`).
 - Watch game RAM variables (e.g. SMW's `$0100` game mode) to tell game logic apart from
   emulator bugs.
 - Find code in a ROM by searching for instruction bytes (`od -An -tx1 -v | grep -ob`): byte

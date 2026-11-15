@@ -56,7 +56,13 @@ Each is documented where it lives in the code.
 - The boot ROM is a clean-room replacement (same protocol, different timing).
 
 **Other**
-- Gamepads are Windows-only (winmm) until the LWJGL move.
+- Gamepads are Windows-only (winmm) until the LWJGL move. Pads are found at startup; while
+  none is connected JFC keeps looking, but once one is in use it stops (each search of an
+  empty winmm slot stalls joystick calls ~160 ms, which froze the game every 2 s), so a
+  second pad must be plugged in before starting.
+- With the window, audio-paced frames occasionally arrive ~35 ms apart (the sound device frees
+  buffer space in ~30 ms chunks), showing one repeated frame. Planned fix in 10c: pace to
+  the monitor's vsync and keep the sound buffer level with dynamic rate control.
 - Coprocessors: SuperFX and SA-1. DSP-n, S-DD1 and others aren't planned.
 
 **SuperFX (Milestone 8)**
