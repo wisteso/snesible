@@ -18,7 +18,7 @@ Last updated: 2026-11-11, Milestone 8 (SuperFX and SA-1).
 | 8 | Coprocessors: SuperFX (Star Fox, Yoshi's Island) and SA-1 (Super Mario RPG) | see git log | done; the user played all three ("pretty much perfectly") |
 | - | Offset-per-tile in modes 2 and 4 (Star Fox horizon); GSU background ROM/RAM buffers | see git log | done |
 | 9 | Debug and state-viewer tools (plan below) | - | planned |
-| 10 | Move video and input to LWJGL; CRT/NTSC shaders | - | planned |
+| 10 | Move video and input to LWJGL; CRT/NTSC shaders (plan: `m10-shader-plan.md`) | branch `m10-video` | in progress: 10a (frontend boundary, 15-bit frame buffer) and 10b (Java NTSC filter) done; 10c-10f (LWJGL window, GPU shaders, CRT pass, GLFW gamepads) to do |
 
 ## What the user has confirmed by playing
 
