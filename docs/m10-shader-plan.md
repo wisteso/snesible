@@ -52,48 +52,75 @@ What the user's examples show, mapped to the model:
 
 ## Target design
 
+### Package layout (the user's request, 2026-11-15)
+
+Two top-level areas instead of `ui` sitting next to `cpu` and `ppu`, and class names that say
+which toolkit they use:
+
+```
+jfc                      Main and the headless tools (Screenshot, AudioRecording, InputScript,
+                         GamepadTest): entry points that wire core and ui together
+jfc.core                 the emulated console; no Swing, AWT, LWJGL or jfc.ui imports
+  .cartridge .cpu .cpu.io .dma .bus .ppu .apu .system
+  .coprocessor .coprocessor.sa1 .coprocessor.superfx
+jfc.ui                   everything that presents the console to a person
+  (root)                 EmulationSession, VideoSink, InputSource, Frame (toolkit-neutral)
+  .audio                 AudioOutput (and the dynamic rate control resampler)
+  .video                 SnesColor, VideoFilter, VideoMode
+  .video.ntsc            the snes_ntsc port (LGPL, kept separate)
+  .input                 GamepadMapping, JoystickState (shared by both toolkits)
+  .input.winmm           Gamepads, WinmmJoysticks (Windows gamepads, used by Swing)
+  .swing                 SwingWindow (window + painting, a VideoSink), SwingKeyboard
+  .lwjgl                 LwjglWindow (GLFW window and loop, a VideoSink), GlRenderer
+                         (OpenGL textures and shaders), GlfwKeyboard, GlfwGamepads, FramePacer
+  .debug                 (Milestone 9) the Swing debugger windows
+```
+
+Tests mirror the same packages. A small test scans `src/main/java/jfc/core` and fails if any
+file imports `java.awt`, `javax.swing`, `org.lwjgl` or `jfc.ui`, so the boundary can't erode.
+Shaders live in `src/main/resources/jfc/ui/lwjgl/shaders/`.
+
 ### The boundary (in the frontend; one small change in the PPU's output stage)
 
 ```
-            jfc.system.Snes  (unchanged)
+            jfc.core.system.Snes  (unchanged)
                    ^
                    |  runFrame(), joypads().setPressed(), apu().drainSamples(),
                    |  ppu().frameBuffer()/visibleLines(), cartridge() for saves
                    |
-   jfc.frontend.EmulationSession   <- extracted from today's EmulatorWindow
-     - emulation thread, frame pacing (audio blocks), SRAM saves, fps counter
-     - each frame: buttons = InputSource.poll(); snes.runFrame(); VideoSink.submit(frame)
+   jfc.ui.EmulationSession   (Swing: its own thread, paced by audio)
+   or LwjglWindow + FramePacer (main thread, paced by the display; see Frame pacing)
+     - each frame: buttons = InputSource.poll(); snes.runFrame(); VideoSink.present(frame)
                    |                              |
           InputSource (interface)        VideoSink (interface)
                    |                              |
-     +-------------+-----------+         +--------+-----------------+
-     | SwingKeyboard           |         | SwingVideo (today's      |
-     | GlfwInput (kbd+gamepad) |         |   window, kept as         |
-     | Gamepads (winmm, legacy)|         |   fallback / --swing)     |
-     +-------------------------+         | GlVideo (LWJGL, shaders)  |
-                                         +---------------------------+
+     +-------------+-------------+       +--------+-----------------+
+     | SwingKeyboard             |       | SwingWindow (--swing)     |
+     | GlfwKeyboard, GlfwGamepads|       | LwjglWindow (default,     |
+     | Gamepads (winmm)          |       |   GPU shaders)            |
+     +---------------------------+       +---------------------------+
 ```
 
-- `Frame` is a small record: `int[] pixels, int width, int height, long number`. The session
-  copies `ppu().frameBuffer()` into one of three buffers (triple buffering) and hands the
-  newest to the sink, so the render thread never waits on the emulator and never reads a
-  half-drawn frame. This replaces today's `imageLock`.
+- `Frame` is a small record: `int[] pixels, int width, int height, long number`. Its pixel
+  array is the PPU's own buffer, valid only during `present()`: the Swing window converts it
+  into its image there, and the LWJGL window uploads it to a texture there (it runs the
+  emulation on its own thread, so nothing is shared).
 - **The core stops at what the PPU computes: 15-bit colour plus master brightness.** Each
   pixel is one `int`, `brightness << 15 | bgr15` (19 bits). Turning that into monitor RGB
-  moves to the frontend (`jfc.video.SnesColor`, today's lookup table), used by Swing, PNG
+  moves to the frontend (`jfc.ui.video.SnesColor`, today's lookup table), used by Swing, PNG
   screenshots and the future debugger. The NTSC port reads the colour and brightness
   directly (applying brightness in 5-bit steps as Snes9x does), and the GPU path uploads the
   raw values as an integer texture (`GL_R32UI`) and does the maths in floating point. The
   24-bit buffer couldn't serve this: below full brightness it no longer holds the exact SNES
   colour. This is the plan's only change to emulation code (~20 lines in `Renderer`/`Ppu`
   plus `RendererTest`/`EffectsTest`).
-- Audio stays on `javax.sound` (`AudioOutput`) and keeps pacing the emulator. OpenAL isn't
-  needed.
+- Audio stays on `javax.sound` (`AudioOutput`); OpenAL isn't needed. From 10c it no longer
+  sets the pace in the LWJGL window (see Frame pacing).
 
 ### Threads with GLFW
 
 GLFW wants its window and event handling on the main thread (mandatory on macOS, good
-practice everywhere). With `GlVideo` the main thread runs the GLFW event loop, input
+practice everywhere). With `LwjglWindow` the main thread runs the GLFW event loop, input
 callbacks and rendering. Emulating a frame takes 1-3 ms, so it can run on the main thread too,
 right before the frame is drawn (see pacing below). The Swing window keeps today's
 emulation thread, paced by audio.
@@ -123,7 +150,7 @@ display sets the pace, and the sound adapts:
   and JFC never needs to detect it. Caveat: windowed variable refresh depends on driver
   settings (NVIDIA: "Enable G-SYNC for windowed and full screen mode"); fullscreen (a key
   toggles it) is the reliable case.
-- All of this lives in the frontend (`GlVideo` and a small pacing class); the core only sees
+- All of this lives in the frontend (`LwjglWindow` and a small pacing class); the core only sees
   `runFrame()` calls. The window title or console says which mode was chosen.
 - Input latency stays about where it is today: input is read and the frame emulated just
   before it's drawn.
@@ -164,13 +191,13 @@ cross-platform:
 ## Sub-steps (one reviewable commit each)
 
 **10a. Frontend boundary (no visible change).**
-First, as its own small commit: the PPU outputs colour + brightness and `jfc.video.SnesColor`
-converts to RGB. Then extract `EmulationSession` from `EmulatorWindow`; add `VideoSink`,
+First, as its own small commit: the PPU outputs colour + brightness and `jfc.ui.video.SnesColor`
+converts to RGB. Then extract `EmulationSession` from the Swing window; add `VideoSink`,
 `InputSource`, `Frame`; make the Swing window implement them. Triple-buffer handoff. Check:
 all tests pass, the game plays exactly as before (user check), `--screenshot` unchanged.
 
 **10b. NTSC filter in plain Java (CPU), usable in Swing right away.**
-`jfc.video.ntsc`: a readable Java port of `snes_ntsc` (decision 2), under its own LGPL
+`jfc.ui.video.ntsc`: a readable Java port of `snes_ntsc` (decision 2), under its own LGPL
 header with credit to Shay Green, with the presets. Runs per frame on the emulation side of the boundary (602x224 output, a few
 million multiply-adds, a millisecond or two). Adds `--screenshot ... --video composite`,
 and a hotkey in the Swing window. Why first:
@@ -183,9 +210,12 @@ Tests: a flat colour field decodes back to (nearly) itself; RGB preset ~ identit
 artifact pattern has a 3-pixel period; per-line phase rotates 120 degrees; the frame phase
 cycles 0, 1, 2 as in Snes9x.
 
-**10c. LWJGL window (sharp pixels only) and frame pacing.**
-Add LWJGL (BOM; `lwjgl`, `lwjgl-glfw`, `lwjgl-opengl`, with natives for Windows plus Linux/
-macOS via Maven profiles). `GlVideo`: GLFW window, vsync, texture upload, aspect-correct
+**10c. Package layout, LWJGL window (sharp pixels only) and frame pacing.**
+First, as its own purely mechanical commit (moves, package lines and imports only, no logic
+changes): the package layout above, `EmulatorWindow` becoming `SwingWindow` with its keyboard
+split out as `SwingKeyboard`, docs updated to the new names, plus the core-boundary test.
+Then: Add LWJGL (BOM; `lwjgl`, `lwjgl-glfw`, `lwjgl-opengl`, with natives for Windows plus Linux/
+macOS via Maven profiles). `LwjglWindow`: GLFW window, vsync, texture upload, aspect-correct
 scaling, fullscreen toggle, keyboard via GLFW. Swing stays behind `--swing`. Packaging:
 the jar plus `target/lib/`, with a manifest `Class-Path` so `java -jar` keeps working
 (decision 6; `jpackage` can make an installer for the open-source release). Update the "no runtime
@@ -209,11 +239,15 @@ Rough size: 10a and 10c are small; 10b and 10d are the substance; 10e/10f are me
 ## Impact on emulation code
 
 One small change: the PPU's frame buffer holds colour + brightness instead of RGB (see
-above). Otherwise the frontend uses only accessors that exist today (`runFrame`, `joypads`,
+above). The package move in 10c touches every file's `package` line and imports, but no
+emulation logic. Otherwise the frontend uses only accessors that exist today (`runFrame`, `joypads`,
 `apu().drainSamples`, `ppu().frameBuffer/visibleLines`, `cartridge`). The frame counter and
 burst phase live in the frontend. The Milestone 8/9 work in the other session can continue in
-parallel; the only shared files are `Main.java` (new options) and the docs. This work should
-live on its own branch (or worktree) and merge when 10a is ready.
+parallel; this work lives on the `m10-video` branch in its own worktree. Merging: git's
+rename detection carries edits made on `main` to the moved files across, since only their
+first lines change. Files *added* on `main` in old packages (a new coprocessor, `jfc.debug`)
+must be moved by hand at merge time, and the docs will conflict where both sides edited them.
+Merging when the other session is between tasks keeps that small.
 
 Interaction with Milestone 9 (debugger): Swing windows and a GLFW window in one process work
 on Windows and Linux; on macOS they fight over the main thread. If the debugger stays in
@@ -232,3 +266,10 @@ deciding together with M9's open decision 4.
 5. **Keep winmm gamepads** for Swing mode; GLFW gamepads in LWJGL mode.
 6. **Packaging**: jar plus `lib/` (my call; the user had no preference).
 7. **The core outputs 15-bit colour + brightness**; RGB conversion lives in the frontend.
+8. **Gamepads are rescanned only on request** (F9), as in Snes9x; no automatic polling for
+   new devices, since many SNES games are latency-sensitive.
+9. **Frame pacing lives entirely in the frontend**, vendor-neutral: locked to vsync on
+   60 Hz multiples, steady clock with vsync otherwise (smooth on G-Sync/FreeSync monitors;
+   the user's is a 144 Hz G-Sync display on NVIDIA).
+10. **Package layout**: `jfc.core` for the console, `jfc.ui` for everything presenting it,
+    toolkit-named classes (`SwingWindow`, `LwjglWindow`).
