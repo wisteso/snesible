@@ -51,7 +51,7 @@ spends its time. `--screenshot` saves a frame as a PNG (add `--video composite` 
 filter), and `--record-audio` saves the sound as a WAV file. The headless modes accept scripted button presses (`BUTTON@frame`).
 
 The APU's boot ROM isn't Nintendo's: it's a clean-room replacement speaking the same upload
-protocol (see `jfc.apu.BootRom`).
+protocol (see `jfc.core.apu.BootRom`).
 
 Put your own ROM dumps in `roms/` (git-ignored). Tests in `RealRomTest` run against them when
 present and are skipped otherwise.
@@ -77,21 +77,27 @@ mvn test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
 
 ## Layout
 
+`jfc.core` is the emulated console, `jfc.ui` everything that presents it to a person, and
+`jfc.tools` the headless tools; `jfc.Main` starts one of them.
+
 | Package         | Hardware                                                              |
 |-----------------|-----------------------------------------------------------------------|
-| `jfc.cartridge` | Game cartridge: ROM/SRAM, header, LoROM/HiROM address mapping          |
-| `jfc.cpu`       | 65816 CPU core (the heart of the Ricoh 5A22)                          |
-| `jfc.cpu.io`    | The rest of the 5A22: NMI/IRQ timers, multiply/divide, joypad ports    |
-| `jfc.dma`       | The 5A22's 8-channel DMA controller                                   |
-| `jfc.bus`       | Memory map and per-access timing (A-bus and B-bus)                    |
-| `jfc.ppu`       | Picture processor: backgrounds, sprites, Mode 7, windows, color math  |
-| `jfc.apu`       | Audio unit: SPC700 CPU, DSP, timers, boot ROM                         |
-| `jfc.system`    | The console: master clock, work RAM, and wiring it all together       |
-| `jfc.frontend`  | Runs the console in real time: frame pacing, sound, saves, input      |
-| `jfc.video`     | Turns the PPU's pixels into a picture: plain RGB or the NTSC filter   |
-| `jfc.video.ntsc` | Java port of Blargg's snes_ntsc NTSC filter (LGPL 2.1+)              |
-| `jfc.ui`        | Swing window and keyboard input                                       |
-| `jfc.ui.input`  | Gamepads (winmm.dll through Java's Foreign Function API)             |
+| `jfc.core.cartridge` | Game cartridge: ROM/SRAM, header, LoROM/HiROM address mapping          |
+| `jfc.core.cpu`       | 65816 CPU core (the heart of the Ricoh 5A22)                          |
+| `jfc.core.cpu.io`    | The rest of the 5A22: NMI/IRQ timers, multiply/divide, joypad ports    |
+| `jfc.core.dma`       | The 5A22's 8-channel DMA controller                                   |
+| `jfc.core.bus`       | Memory map and per-access timing (A-bus and B-bus)                    |
+| `jfc.core.ppu`       | Picture processor: backgrounds, sprites, Mode 7, windows, color math  |
+| `jfc.core.apu`       | Audio unit: SPC700 CPU, DSP, timers, boot ROM                         |
+| `jfc.core.system`    | The console: master clock, work RAM, and wiring it all together       |
+| `jfc.core.coprocessor` | Cartridge chips: SuperFX (GSU) and SA-1                        |
+| `jfc.ui`        | Runs the console in real time: frame pacing, saves, input polling     |
+| `jfc.ui.audio`  | Sound output                                                          |
+| `jfc.ui.video`  | Turns the PPU's pixels into a picture: plain RGB or the NTSC filter   |
+| `jfc.ui.video.ntsc` | Java port of Blargg's snes_ntsc NTSC filter (LGPL 2.1+)          |
+| `jfc.ui.input`  | Gamepads (winmm.dll through Java's Foreign Function API)              |
+| `jfc.ui.swing`  | Swing window and keyboard input                                       |
+| `jfc.tools`     | Headless tools: header info, screenshots, audio recording, run reports |
 
 ## Roadmap
 
@@ -109,5 +115,5 @@ cross-platform gamepads and CRT shaders.
 
 ## Licensing note
 
-The `jfc.video.ntsc` package is a port of Shay Green's (Blargg's) `snes_ntsc` library and is
+The `jfc.ui.video.ntsc` package is a port of Shay Green's (Blargg's) `snes_ntsc` library and is
 licensed under the GNU Lesser General Public License 2.1 or later, as the original is.
