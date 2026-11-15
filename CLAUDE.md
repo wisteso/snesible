@@ -19,9 +19,10 @@ Read these before working on the project:
   non-obvious logic. The user asked for this explicitly.
 - Readability first, speed second. No runtime dependencies beyond the JDK (Gson is test-only);
   Milestone 10 will add LWJGL for the frontend only.
-- `jfc.video.ntsc` is a port of Blargg's `snes_ntsc` and stays LGPL 2.1+ with its notice;
+- `jfc.ui.video.ntsc` is a port of Blargg's `snes_ntsc` and stays LGPL 2.1+ with its notice;
   don't move other code into it.
-- Keep the core (`jfc.system` and below) free of Swing; UI and input sit behind small
+- Keep `jfc.core` (the console) free of Swing, AWT, LWJGL, `jfc.ui` and `jfc.tools`
+  (`CoreBoundaryTest` checks it). Headless tools go in `jfc.tools`, only `Main` in `jfc`. UI and input sit behind small
   boundaries for the planned LWJGL move.
 - Verify with evidence: run the test suites, and use the headless `--run`, `--screenshot` and
   `--record-audio` modes (read PNGs with the Read tool). Don't claim a fix without checking it.

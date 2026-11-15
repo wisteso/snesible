@@ -46,10 +46,11 @@ failure details.
 | `SnesTest` | memory map, access timing, frame length, NMI, V-IRQ, DMA, HDMA incl. mid-frame enable (hand-assembled programs) |
 | `PpuPortsTest`, `RendererTest`, `EffectsTest` | VRAM/CGRAM/OAM ports, layers, sprites, priorities, color math, windows, Mode 7, mosaic, offset-per-tile |
 | `ApuTest`, `DspTest` | boot ROM upload protocol, timers, voice playback, ENDX, key off |
+| `CoreBoundaryTest` | `jfc.core` imports no Swing, AWT, LWJGL, `jfc.ui` or `jfc.tools` |
 | `VideoFilterTest` | sharp-pixel conversion; NTSC filter: size, flat colors, composite vs S-Video artifacts, burst phase per line and frame, scanlines, brightness |
 | `ArithmeticUnitTest`, `JoypadPortsTest`, `GamepadMappingTest` | small units |
 
-The total is about 905 tests, taking about 10 s.
+The total is about 906 tests, taking about 10 s.
 
 ## Headless tools (essential for checking work without seeing or hearing it)
 
@@ -79,9 +80,9 @@ J="$JAVA_HOME/bin/java"
 
 ### Debugging techniques that worked
 - **Throwaway diagnostics in the scratchpad**: compile a class *in the same package*
-  (e.g. `package jfc.ppu;`) against `target/classes` to read package-private state:
+  (e.g. `package jfc.core.ppu;`) against `target/classes` to read package-private state:
   `javac -cp target/classes -d <scratch>/out Diag.java`, then
-  `java -cp "C:/dev/projects/JFC/target/classes;<scratch>/out" jfc.ppu.Diag` (absolute
+  `java -cp "C:/dev/projects/JFC/target/classes;<scratch>/out" jfc.core.ppu.Diag` (absolute
   Windows-style classpath with `;`).
 - `Cpu.setInstructionListener` gives per-instruction hooks (PC histograms, per-line sampling).
 - **Window stutter**: wrap the `VideoSink` in a scratch harness that runs the real

@@ -10,7 +10,7 @@ Status: **agreed** (2026-11-15); 10a and 10b done on `m10-video`. The user's dec
 2. A GPU shader pipeline (LWJGL + OpenGL) for that and for CRT effects (beam shape, mask,
    gamma, 4:3 aspect).
 3. Cross-platform keyboard and gamepad input from the same library.
-4. **Minimal impact on the emulation classes**: the core (`jfc.system` and below) should need
+4. **Minimal impact on the emulation classes**: the core (`jfc.core.system` and below) should need
    no changes at all. Everything happens behind a small frontend boundary.
 
 ## What the NTSC filter actually needs (answering "does it need prior frames?")
@@ -58,8 +58,9 @@ Two top-level areas instead of `ui` sitting next to `cpu` and `ppu`, and class n
 which toolkit they use:
 
 ```
-jfc                      Main and the headless tools (Screenshot, AudioRecording, InputScript,
-                         GamepadTest): entry points that wire core and ui together
+jfc                      Main: the command-line entry point
+jfc.tools                the headless tools (Screenshot, AudioRecording, HeadlessRun,
+                         CartridgeInfo, InputScript, GamepadTest)
 jfc.core                 the emulated console; no Swing, AWT, LWJGL or jfc.ui imports
   .cartridge .cpu .cpu.io .dma .bus .ppu .apu .system
   .coprocessor .coprocessor.sa1 .coprocessor.superfx
@@ -272,4 +273,5 @@ deciding together with M9's open decision 4.
    60 Hz multiples, steady clock with vsync otherwise (smooth on G-Sync/FreeSync monitors;
    the user's is a 144 Hz G-Sync display on NVIDIA).
 10. **Package layout**: `jfc.core` for the console, `jfc.ui` for everything presenting it,
-    toolkit-named classes (`SwingWindow`, `LwjglWindow`).
+    `jfc.tools` for the headless tools, `Main` alone in `jfc`; toolkit-named classes
+    (`SwingWindow`, `LwjglWindow`). The aim is code that documents itself.

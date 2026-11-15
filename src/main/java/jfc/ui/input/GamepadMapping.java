@@ -7,7 +7,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
-import jfc.cpu.io.JoypadPorts;
+import jfc.core.cpu.io.JoypadPorts;
 
 /**
  * Translates a PC gamepad's state into SNES controller buttons.
