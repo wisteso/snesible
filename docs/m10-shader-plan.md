@@ -108,20 +108,23 @@ display sets the pace, and the sound adapts:
 - **Dynamic rate control** (all modes): each frame's audio is resampled by at most 0.5% to keep
   the sound card's buffer about half full, so audio writes never block and never run dry.
   The pitch change is inaudible. (Snes9x and RetroArch do the same.)
-- **The pacing mode is picked from the monitor's refresh rate** (`glfwGetVideoMode`):
-  - **A multiple of ~60 Hz (60, 120, 240):** vsync on; emulate one frame every 1, 2 or 4
-    refreshes, draw it, swap. Every frame shows for the same time, so scrolling is perfectly
-    smooth. The game runs at 60.00 Hz instead of 60.10 (0.16% slow, imperceptible).
-  - **Variable refresh (G-Sync / FreeSync):** pace with a steady clock at the SNES's own
-    60.10 Hz and present each frame immediately; the monitor refreshes when the frame
-    arrives. Exact speed and smooth. On Windows this works reliably in fullscreen (windowed
-    needs the driver's "windowed mode" VRR option). Selected with an option, since GLFW can't
-    detect VRR.
-  - **Anything else (for example 144 Hz without VRR):** 144 / 60.1 isn't a whole number, so
-    frames necessarily alternate between 2 and 3 refreshes (14 and 21 ms), a slight judder on
-    smooth scrolling. Two ways around it: fullscreen at 120 Hz (GLFW can request that refresh
-    rate for the fullscreen mode, so the desktop can stay at 144), or VRR. Windowed at 144 Hz
-    falls back to the steady clock.
+- **Two pacing modes, both with vsync on** (no tearing), picked automatically from the
+  monitor's refresh rate (`glfwGetVideoMode`), with an option to force either:
+  - **Locked to the display**, when the refresh rate is within 0.5% of a multiple of 60 Hz
+    (60, 120, 240): emulate one frame every 1, 2 or 4 refreshes, draw it, swap. Perfectly even
+    frames; the game runs at 60.00 Hz instead of 60.10 (imperceptible).
+  - **Steady clock**, for every other rate (144, 165, ...): emulate frames at the SNES's own
+    60.10 Hz and swap each as soon as it's drawn. On a variable-refresh monitor (G-Sync,
+    FreeSync, "G-Sync compatible") the display waits for each frame, so this is smooth at
+    exact speed. On a fixed-refresh monitor frames alternate between 2 and 3 refreshes, a
+    slight judder; fullscreen at a requested 120 Hz avoids it.
+- Nothing vendor-specific: variable refresh is applied by the driver to any window presenting
+  with vsync below the monitor's maximum rate, so the same code serves NVIDIA, AMD and Intel,
+  and JFC never needs to detect it. Caveat: windowed variable refresh depends on driver
+  settings (NVIDIA: "Enable G-SYNC for windowed and full screen mode"); fullscreen (a key
+  toggles it) is the reliable case.
+- All of this lives in the frontend (`GlVideo` and a small pacing class); the core only sees
+  `runFrame()` calls. The window title or console says which mode was chosen.
 - Input latency stays about where it is today: input is read and the frame emulated just
   before it's drawn.
 
@@ -188,7 +191,8 @@ the jar plus `target/lib/`, with a manifest `Class-Path` so `java -jar` keeps wo
 (decision 6; `jpackage` can make an installer for the open-source release). Update the "no runtime
 dependencies" rule in CLAUDE.md/development.md to "LWJGL only, frontend only". Frame pacing
 as described above: dynamic rate control for audio, vsync pacing on ~60 Hz multiples, a
-steady-clock mode for VRR and other rates, optional fullscreen at a chosen refresh rate.
+steady-clock mode (with vsync) for all other rates, which variable-refresh monitors make
+smooth; fullscreen toggle, optionally at a chosen refresh rate.
 
 **10d. Shader pipeline + NTSC passes.**
 Pass framework (load GLSL from resources, FBO chain, uniforms for presets), then passes 1-2.
