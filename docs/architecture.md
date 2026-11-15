@@ -2,7 +2,8 @@
 
 JFC is an educational SNES emulator. Each package mirrors a piece of real hardware, and clarity
 beats speed. This file explains how the pieces fit together; the code's Javadoc explains each
-piece in detail.
+piece in detail. The frontend (`jfc.ui`: windows, pacing, NTSC, shaders, sound, input) has its
+own detailed guide in `frontend.md`.
 
 ## Package map
 

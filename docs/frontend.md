@@ -1,0 +1,431 @@
+# Frontend guide (`jfc.ui`, `jfc.tools`): how the Milestone 10 code works
+
+Written for future sessions, so they can work on the windows, video, sound and input code without
+re-reading all of it. `architecture.md` has the overview; this file holds the details,
+reasons, gotchas and known limits. `m10-shader-plan.md` is the original plan and the user's
+decisions; where it and the code disagree, the code (and this file) win. See "Where the plan
+and the code differ" at the end.
+
+Branch history: all of this was built on `m10-video` (worktree `.claude/worktrees/m10-video`),
+branched from `main` at `850cca2`. As of 2026-11-15 `main` had no commits after that point,
+so the merge would be a fast-forward. The user wants to play-test before merging.
+
+## 1. What changed for someone coming from `main`
+
+If you last worked on `main` before Milestone 10, these are the changes that affect you:
+
+1. **Packages moved.** All emulation code is now under `jfc.core` (`jfc.cpu` became
+   `jfc.core.cpu`, `jfc.ppu` became `jfc.core.ppu`, and so on). The windows, sound and input
+   are under `jfc.ui`, and the headless tools are under `jfc.tools`. Only `Main` is left in
+   `jfc`. The move changed only `package` lines and imports, no logic. Any new file you add
+   on `main` in an old package has to be moved by hand when merging.
+2. **The PPU frame buffer no longer holds RGB.** Each `int` is
+   `brightness << 15 | bgr15` (19 bits: master brightness 0-15, then 15-bit BGR as in CGRAM).
+   This was the only logic change to emulation code (step 5 of `Renderer`). To get RGB, call
+   `jfc.ui.video.SnesColor.toRgb(pixel)`. Anything that reads `ppu().frameBuffer()` (tests,
+   tools, the Milestone 9 debugger) has to convert. Why: a filter or shader needs the exact
+   SNES color even during fades, and a 24-bit value below full brightness has lost it.
+3. **`jfc.core` may not import** `java.awt`, `javax.swing`, `javax.imageio`, `org.lwjgl`,
+   `jfc.ui` or `jfc.tools`. `CoreBoundaryTest` scans the sources and fails the build if it
+   does.
+4. **The OpenGL window is now the default**, and the Swing window is behind `--swing`. LWJGL
+   is the only runtime dependency, and only `jfc.ui.lwjgl` uses it. Run the game with
+   `java -jar target/jfc-0.1.0-SNAPSHOT.jar`: the manifest puts the jars in `target/lib` on
+   the class path. `java -cp target/classes` has no LWJGL. The headless tools work that way,
+   and playing falls back to Swing.
+5. **The sound card no longer sets the pace.** Frames are paced by the display or a steady
+   clock, and the audio is resampled by up to 0.5% to keep the device buffer half full
+   (dynamic rate control). Don't reintroduce blocking audio writes as the timing source.
+6. **Gamepads:** the Swing window still reads them through winmm and only looks for new ones
+   when the user presses F9. The OpenGL window reads them through GLFW, which notices
+   hot-plugging by itself.
+
+## 2. The boundary
+
+```
+jfc.core.system.Snes                      (the console; knows nothing about screens)
+      ^  runFrame(), joypads().setPressed(), apu().drainSamples(),
+      |  ppu().frameBuffer()/visibleLines(), cartridge() for saves
+jfc.ui.EmulationSession                   (owns the Snes: input -> frame -> video -> audio -> saves)
+      |                         |
+ InputSource.poll(int[])   VideoSink.present(Frame)
+```
+
+- `EmulationSession.runFrame()` does one frame, in this order:
+  1. Poll every `InputSource` and OR the buttons together per player, so the keyboard and
+     gamepad 1 both drive controller 1.
+  2. Run `snes.runFrame()`.
+  3. Call `present(Frame)`.
+  4. Every 60 frames, write SRAM if it changed.
+  5. Drain the frame's audio and play it.
+  6. Record the timing used for the fps title and `--stats`.
+- Two ways to drive it:
+  - `start()` runs its own non-daemon thread with a `FrameClock`. The Swing window uses
+    this. The thread is non-daemon so the JVM waits for the final save.
+  - A window that syncs to the display calls `powerOn()`, then `runFrame()` from its own
+    loop, then `powerOff()`. The OpenGL window does this.
+- **`Frame.pixels()` is the PPU's own buffer, not a copy.** It's valid only during
+  `present()`, because the next frame is drawn into the same array. Convert or upload it
+  inside `present()`. Never keep a reference.
+- `Frame.number()` counts from 1 after reset. The NTSC filter uses `number % 3` as the
+  frame's burst phase, so frame 1 gets phase 1, as in Snes9x.
+- **Frame width is hard-coded to 256** in `EmulationSession.runFrame` and `Screenshot`. When
+  hi-res modes (5/6, pseudo-hi-res) land, the PPU must report its width. Section 8 lists the
+  other places that will need changes.
+- `VideoSink`'s Javadoc says `present` runs "on the emulation thread". In the OpenGL window
+  that's the main thread, which is also the GL thread.
+
+## 3. Threads
+
+| Window | Threads | Who calls `runFrame` | Input hand-off |
+|--------|---------|----------------------|----------------|
+| OpenGL (`LwjglWindow`) | **one**: the main thread runs GLFW events, emulation, GL drawing and swaps | `LwjglWindow.loop` | none needed: GLFW callbacks fire inside `glfwPollEvents()` on the same thread |
+| Swing (`SwingWindow`) | `emulation` thread plus Swing's event thread | `EmulationSession.start()` | `SwingKeyboard` uses an `AtomicInteger`; the image is guarded by `imageLock`; mode and scanlines are `volatile` |
+
+GLFW must be used on the main thread: macOS requires it, and the GL context belongs to its
+creator. Never call GLFW or GL from another thread. Emulating a frame takes a few ms, so a
+single thread is enough.
+
+## 4. The OpenGL window (`jfc.ui.lwjgl`)
+
+### Startup (`Main.play` → `LwjglWindow.open` → `play`)
+- `open()`:
+  - Calls `useFfmMemoryAccess()` (`Configuration.MEMORY_BACKEND = "ffm"`). This must come
+    before LWJGL touches native memory, or JDK 25 prints `sun.misc.Unsafe` "terminally
+    deprecated" warnings. Tests call it too.
+  - Starts GLFW and creates a hidden 768x672 window with an OpenGL 3.3 core,
+    forward-compatible context. It then centers the window, turns vsync on
+    (`glfwSwapInterval(1)`), builds the `GlRenderer` and shows the window.
+  - If anything fails, it throws. `Main` catches `LinkageError` (LWJGL isn't on the class
+    path) and `RuntimeException` (no GL 3.3), prints the reason and falls back to Swing.
+- `play()`:
+  1. Builds `GlfwGamepads` and the `EmulationSession` with inputs `[keyboard, gamepads]`.
+  2. Measures the display and chooses the pacing *before* `powerOn()`, so the measuring
+     pause doesn't starve a freshly opened sound buffer.
+  3. Runs the loop.
+  4. When the window closes, calls `powerOff()` to write the save, then cleans up in
+     `finally`.
+
+### The loop and pacing
+- `PacingMode` has three values:
+  - `AUTO` (default) chooses one of the two real modes below.
+  - `VSYNC`: the loop runs once per refresh, because each `glfwSwapBuffers` waits for one. It
+    runs a frame every `refreshesPerFrame` refreshes and redraws the same picture in between.
+    The game then runs at refresh / N (60.00 instead of 60.10, which nobody notices). The
+    audio's rate control absorbs the difference.
+  - `CLOCK`: `FrameClock.waitForNextFrame()` at 60.10 (NTSC) or 50.01 (PAL), then poll
+    events, run, draw and swap. Vsync stays on, so there's no tearing. On a G-Sync/FreeSync
+    display the refresh follows the frames, which is smooth. On a fixed 144 Hz display,
+    frames alternate between 2 and 3 refreshes, a slight judder.
+- `PacingDecision.choose(measured, fps, requested)` is a pure function, tested by
+  `PacingDecisionTest`:
+  - With `AUTO`, it locks only if the measured rate is within **0.5%** of a whole multiple of
+    the console's fps.
+  - With a forced `--pacing vsync`, it allows **1%** but never a wrong game speed. At 144 Hz
+    that would mean 72 fps, so it refuses, prints a message and uses the clock.
+  - A measured rate outside 20-500 Hz means "vsync isn't working" (forced off in the driver),
+    and it uses the clock.
+- **Why measure instead of asking GLFW:** GLFW reports whole numbers (a 59.94 Hz display
+  says 59) and can't tell whether the driver forces vsync off. `measureRefreshRate()` does 60
+  swaps, each followed by `glFinish()`, ignores the first 20 and returns the median.
+  Without the skip and the `glFinish`, the first launch once measured nonsense: right after
+  a window appears, swaps return without waiting.
+- The window measures again on these events:
+  - F11.
+  - Moving to another monitor: the position callback compares `currentMonitor()`, which is
+    the monitor under the window's center.
+  - Up to 3 times, 2 s apart, while vsync looks broken.
+
+  Each measurement **pauses the game for about 60 refreshes** (~0.4 s at 144 Hz). The audio
+  buffer then drops below 10% and is topped up with silence, by design.
+- While the window is minimized it always uses the clock and doesn't draw: a minimized
+  window's swaps may not wait.
+- The console prints the decision ("Display: 143.9 Hz. Pacing: steady clock ...") and the
+  title shows `NN fps (vsync|clock)`.
+
+### Fullscreen (F11)
+- Exclusive fullscreen at the desktop resolution of the window's current monitor. It uses
+  `--refresh <hz>` if given, else the desktop rate. Leaving fullscreen restores the saved
+  window position and size.
+- **Every switch blanks the screen for about 4 s** on the user's G-Sync monitor. The
+  `glfwSetWindowMonitor` call takes 10-20 ms, but the swaps after it block while the monitor
+  re-syncs. A borderless window covering the screen was tried: Windows treats it as
+  fullscreen and pauses just as long, so it was removed. This isn't a JFC bug.
+- **The NVIDIA driver ignored `--refresh 120`** and stayed at 144 Hz (probably "Preferred
+  refresh rate: Highest available"). So the locked-vsync path has never run on the user's
+  real hardware. Only `PacingDecisionTest` covers it.
+
+### Keys (`handleKey`, `GlfwKeyboard`)
+- Window keys:
+  - F2: next `VideoMode`.
+  - F3: scanlines.
+  - F11: fullscreen.
+  - Esc: quit.
+  - F9: only prints that the window finds gamepads by itself.
+- Everything else goes to `GlfwKeyboard`. Its key map matches `SwingKeyboard` and
+  `Controls.HELP`. Keep all three in sync when changing keys.
+- GLFW names keys by their US-layout position, so the controller keys keep their places on
+  other keyboard layouts. Auto-repeat (`GLFW_REPEAT`) is ignored.
+- Losing focus releases every held button, because the key-up events would never arrive.
+  (The Swing window doesn't do this, so a key held while it loses focus can stick until it's
+  pressed again.)
+
+### Gamepads (`GlfwGamepads`)
+- At startup it adds every joystick already present, then listens for the joystick callback
+  (connect/disconnect). The callback fires during `glfwPollEvents()`, on the main thread.
+  There's no polling for devices, so none of winmm's ~160 ms stalls.
+- **Two paths per pad:**
+  - `glfwJoystickIsGamepad(jid)` is true when the pad is in SDL's controller database, which
+    is built into GLFW. Then `glfwGetGamepadState` is mapped **by position**:
+    - Face buttons: bottom = SNES B, right = A, left = Y, top = X.
+    - Back/Start = Select/Start; bumpers = L/R.
+    - The triggers also work as L/R once past 0.5. They rest at -1.
+    - D-pad, or the left stick past 0.5.
+
+    **`gamepad.properties` is ignored for these pads.**
+  - Otherwise the raw path: buttons as bits, axes 0/1 as X/Y and hat 0 as degrees (via
+    `hatDegrees`) go into `JoystickState`, then `GamepadMapping.toSnesButtons`. That's the
+    same mapping class and file the winmm reader uses.
+- **The user's Buffalo SNES pad (USB 0583:2060)** shows up in GLFW as
+  "USB,2-axis 8-button gamepad": 8 buttons, 2 axes, no hats, not in the database. It takes
+  the raw path with the default mapping (device buttons 0-7 = A, B, X, Y, L, R, Select,
+  Start), which the user confirmed under winmm. It was detected as controller 1, but **no
+  button presses have been tested through GLFW yet.** If GLFW numbers the buttons
+  differently from winmm, `gamepad.properties` fixes it. However, `--gamepad-test` still
+  reads winmm, so the numbers it shows may not match GLFW's.
+- **Players shift when a pad is unplugged.** Players are a list in plug-in order (at most
+  2). If pad 1 is unplugged, pad 2 becomes controller 1. The winmm reader does the same. A
+  third pad is reported and ignored.
+
+### Rendering (`GlRenderer`, shaders in `src/main/resources/jfc/ui/lwjgl/shaders/`)
+- Every frame, the raw 19-bit pixels go unchanged into `rawTexture` (`GL_R32UI`) with
+  `glTexSubImage2D`. Integer textures can't be filtered, so it's `GL_NEAREST` and the
+  shaders read it with `texelFetch`.
+- **Sharp mode:** one pass, `snes-pixels.frag`, straight to the window. It converts with the
+  same integer maths as `SnesColor` (`(c<<3)|(c>>2)`, then `*brightness/15`, rounded down),
+  so it shows the same colors as Swing and the PNGs. `GlRendererTest` checks every pixel.
+- **NTSC modes:** two passes.
+  1. `snes-ntsc.frag` renders into `ntscPictureTexture` (RGBA8, attached to
+     `ntscFramebuffer`) at 602x448 (`outWidth(256)` × line-doubled height). It runs once
+     per *emulated* frame, inside `present`/`upload`, not once per refresh.
+  2. `rgb-picture.frag` draws that texture into the window with bilinear filtering. This one
+     runs on every draw, including the repeat draws in vsync mode.
+- **The NTSC table** (`SnesNtsc.table()`, 8192 rows × 128 columns of packed RGB) is built in
+  Java and uploaded only when the mode changes (`ntscTableMode != mode`). It takes about
+  25 ms, so a mode switch costs one late frame. Changing scanlines doesn't rebuild it,
+  because scanlines are a uniform.
+- `fullscreen.vert` draws one oversized triangle from `gl_VertexID`, with no vertex data.
+  Core profile still requires a bound VAO, hence `emptyVertexArray`. The fragment shaders
+  work out positions from `gl_FragCoord` and a `viewport` uniform.
+- **Row order (gotcha):** textures are uploaded top line first, so texture row 0 is the
+  picture's top line, which is the *bottom* row in GL's convention. That's why the present
+  shaders use `position.y = 1.0 - position.y`. `snes-ntsc.frag` treats `gl_FragCoord.y` as
+  the top-down row number, so the FBO is stored top line at row 0 too. As a result,
+  `readNtscPicture()` (`glReadPixels` from row 0) returns rows top-down with no flip. Keep
+  this consistent when adding a pass (for example the CRT pass).
+- Letterboxing: `draw()` computes the largest rectangle with the picture's shape that fits
+  the window, centers it, and clears the rest to black. Sharp mode keeps 8:7 (square
+  pixels). NTSC keeps 602:448, which is close to 4:3.
+- `glGetUniformLocation` is called on every draw. This is cheap enough, and caching the
+  locations would be an easy optimisation if ever needed.
+
+### The NTSC shader in detail (`snes-ntsc.frag`, LGPL)
+A GLSL port of the filtering step of `SnesNtsc.blit`. Its output is **identical to the Java
+filter, pixel for pixel**. `GlRendererTest` checks every pixel for composite, S-Video and RF,
+with scanlines on and off, over frames 1-3 (all burst phases).
+- One fragment per output pixel `x`:
+  - Chunk `n = x / 7`, position `j = x % 7`, `base = 3n`.
+  - Six input pixels reach the fragment:
+    - `k0 = base+1`
+    - `k1 = j<2 ? base-1 : base+2`
+    - `k2 = j<4 ? base : base+3`
+    - `kx0 = base-2`
+    - `kx1 = j<2 ? base-4 : base-1`
+    - `kx2 = j<4 ? base-3 : base`
+
+    These reproduce which pixels the C blitter's rolling `kernel0-2`/`kernelx0-2` registers
+    hold at output pixel `j`. The table columns are `j`, `(j+12)%7+14`, `(j+10)%7+28`,
+    `(j+7)%14`, `(j+5)%7+21` and `(j+3)%7+35`, plus `burstColumn = ((framePhase+line)%3)*42`.
+    Derive these again from `SnesNtsc.blit` before changing any of them.
+- `tableRow(i)` applies master brightness the Snes9x way (`(2·c·b + 15) / 30`). It then
+  reduces the color to the 13-bit index (`r>>1`, `g`, `b>>1`: 4-5-4 bits). Pixels with
+  `i < 0` or `i > chunkCount*3` are black, which is how the C blitter pads each line.
+- Sums are unsigned 32-bit packed RGB (`r<<21 | g<<11 | b<<1` with bias). The branch-free
+  clamp is copied from `SnesNtsc.clamp`.
+- Scanlines darken odd output rows by 1/8 (`rgb - (rgb>>3 & 0x1F1F1F)`), as Snes9x does.
+
+## 5. The Swing window (`jfc.ui.swing`) and winmm gamepads
+
+- `SwingWindow.play()` builds the window and the session, then `session.start()`. Its
+  `present()` runs on the emulation thread:
+  1. If the mode or scanlines changed, it builds a new `VideoFilter`. With an NTSC mode
+     that's a new `SnesNtsc` table, about 25 ms.
+  2. It runs the filter **on the CPU** into a `BufferedImage`, under `imageLock`.
+  3. It calls `repaint()`.
+- Swing's event thread paints the image scaled to fit. It uses nearest-neighbour for sharp
+  pixels and **bilinear when the picture is wider than 256**, which assumes "wider than 256
+  = NTSC". Hi-res will break that assumption.
+- Keys are read through a `KeyEventDispatcher`, so they work whichever component has focus.
+- No vsync, so frames can tear or be shown twice. This is the fallback window. The user
+  chose to keep it (`--swing`).
+- Gamepads: `jfc.ui.input.winmm.Gamepads` plus `WinmmJoysticks` (FFM calls into
+  `winmm.dll`). Windows only.
+  - It looks for pads at startup and again only on F9 (`requestRescan()`). The search runs
+    at the start of the next `poll`.
+  - **Why only on request:** asking winmm about an *empty* slot stalls about 160 ms, and
+    winmm serialises calls, so the per-frame read of the active pad waits too. An automatic
+    rescan every 2 s froze the game every 2 s. A background thread didn't help, because of
+    the same lock. The user decided on demand only, as Snes9x does, because many SNES games
+    are latency-sensitive. Don't add automatic rescanning back.
+- `--gamepad-test` (`jfc.tools.GamepadTest`) uses winmm too.
+
+## 6. Video conversion (`jfc.ui.video`) and the NTSC port (`jfc.ui.video.ntsc`)
+
+- `SnesColor`: plain RGB from a packed pixel through a 2^19-entry lookup table (2 MiB).
+  Channels are widened 5→8 bits by copying the top bits, then `*brightness/15`, rounded
+  down. Used by Swing, PNG screenshots and (mirrored in GLSL) the sharp shader.
+- `VideoMode`: `SHARP`, `COMPOSITE`, `SVIDEO`, `RGB`, `MONOCHROME` and `RF`. Each has an
+  `NtscSetup` (null for sharp). F2 cycles through them in this order. `parse()` accepts
+  `svideo` or `s-video`.
+- `VideoFilter`: what Swing and `--screenshot` use. Sharp output is 256x224. NTSC output is
+  602x448: each line is drawn twice, always, as in Snes9x. It applies brightness through
+  `NtscInput.ENTRY_FOR_PIXEL`, a 2^19 table built lazily on first NTSC use.
+- `SnesNtsc`: a port of `snes_ntsc` 0.2.2 that keeps the C code's `float` steps and
+  packed-integer tricks, so the output matches Snes9x. **The package is LGPL 2.1+** (header
+  on each file), so don't put other code in it. The hi-res (512-pixel) blitter is **not
+  ported**.
+- `NtscSetup` presets follow Snes9x's options. RF is composite with `mergeFields = false`:
+  visible dot crawl.
+- **Faithful quirks; don't "fix" these:**
+  - Full white comes out `F6FCF6`, not `FFFFFF`. The table keeps only 4 bits of red and
+    blue (13-bit index), exactly as the original does.
+  - S-Video adds a slight tint (≤10 per channel) to flat colors. The original does this too.
+  - The frame phase cycles 0, 1, 2 per frame, as in Snes9x. Real hardware is probably a
+    2-frame cycle, but the user chose Snes9x's behaviour (plan decision 3).
+  - Master brightness is applied before the filter, in 5-bit steps, as Snes9x's
+    `mul_brightness` does. So a fade in an NTSC mode differs slightly from a fade in sharp
+    mode.
+  - NTSC scanlines are Snes9x's simple "darken every second row". A real beam profile was
+    meant for the CRT pass (10e, deferred).
+
+## 7. Sound (`jfc.ui.audio`)
+
+- `AudioOutput`: Java Sound, 32 kHz, 16-bit stereo, with a **128 ms device buffer**
+  (4096 frames). It writes half a buffer of silence at open, so it starts at the target
+  level.
+- Each frame, `play()` works as follows:
+  1. It measures the fill level (`1 - available/capacity`) and smooths it (10% per frame,
+     because the device reports in coarse steps).
+  2. It sets `ratio = 1 + 0.005 · clamp((0.5 - fill) · 2)`, then resamples with
+     `AudioResampler`. That's linear interpolation, carrying the previous sample across
+     calls so chunks join without clicks. Its output runs one sample behind.
+  3. It writes **only what fits**. Anything more is dropped and counted in `droppedBytes`.
+     It never blocks.
+- If the fill level drops below 10% (after a pause such as a window drag, a measurement or
+  a fullscreen switch), it tops the buffer up with silence to 50% at once instead of
+  creeping back at 0.5%.
+- No sound device: the session runs silently and prints a line.
+- `--stats` prints, once a second: fps, the shortest and longest frame gap, the average
+  buffer fill, the rate adjustment and dropped bytes. Healthy numbers on the user's machine:
+  61 fps, gaps 16.0-17.5 ms windowed (16.3-17.0 fullscreen), buffer ~50%, 0 dropped. The
+  first ~2 s show gaps up to ~33 ms while the JIT warms up.
+
+## 8. Known limits, open items and future work
+
+**Not yet verified by the user** (they haven't play-tested 10c-10f yet):
+- Buffalo pad button presses through GLFW (see section 4).
+- Whether G-Sync works in windowed mode. That needs NVIDIA's "Enable G-SYNC for windowed and
+  full screen mode". Fullscreen is the reliable case.
+- The locked-vsync path on real hardware (the driver kept 144 Hz).
+
+**Known limits**
+- The ~4 s blank on each fullscreen switch (the display, not JFC).
+- Each refresh measurement pauses the game for ~0.4 s (at startup, F11, monitor change).
+- Swing: no vsync, and a key held while the window loses focus can stick.
+- `--gamepad-test` reads winmm, not GLFW.
+- Only 2 players. Players shift down when pad 1 is unplugged.
+- Only the build machine's LWJGL natives are bundled. A Maven profile picks Windows, Linux,
+  macOS x64 or macOS arm64 at build time, so a jar built on Windows runs the OpenGL window
+  only on Windows.
+- **macOS is untested and likely needs `-XstartOnFirstThread`** for GLFW. Nothing handles
+  that yet. Linux is untested too.
+- `GlRendererTest` needs a real OpenGL 3.3 context (hidden window). It's skipped where none
+  exists, such as a CI server, so a shader regression there would go unnoticed.
+
+**When hi-res / interlace land in the PPU** (gaps listed in `status.md`):
+- `EmulationSession` and `Screenshot` must pass the real width instead of `256`.
+- NTSC: port `snes_ntsc_blit_hires` to Java and add a hi-res variant of the shader (the
+  table supports it, since its packed-RGB headroom allows twice the contributions).
+  `chunkCount` is already a uniform.
+- Sharp mode would draw 512x224 at a 2.3:1 shape. Both windows' letterboxing needs a pixel
+  aspect (8:7 for the *display*, not the buffer).
+- Swing's "width > 256 means bilinear" check would turn on for hi-res sharp pixels.
+- Interlace doubles the height (448/478), and NTSC line doubling would have to stop.
+
+**Milestone 9 (debugger) interaction:** the plan keeps the debugger in Swing. Swing windows
+and a GLFW window in one process work on Windows and Linux. On macOS they fight over the main
+thread, so there the debugger would need the Swing video window. Viewers must take their
+snapshots between frames on the thread that runs `runFrame()`, which is the **main thread**
+in the OpenGL window. Package: the M10 layout lists it as `jfc.ui.debug`, while
+`status.md`'s older M9 plan says `jfc.debug`. Either keeps it out of `jfc.core`, so ask the
+user which one when M9 starts.
+
+**10e (CRT pass), deferred by the user:** it would be a third pass after the NTSC FBO (beam
+profile, mask, gamma, curvature), replacing Snes9x-style scanlines. Keep the top-down row
+convention described in section 4.
+
+## 9. Testing and checking this code
+
+- **Unit tests:**
+
+  | Test | What it checks |
+  |------|----------------|
+  | `VideoFilterTest` | NTSC sizes, flat colors, artifacts, phases, scanlines, brightness |
+  | `GlRendererTest` | GPU vs Java, exact |
+  | `PacingDecisionTest` | 60/59.94/120/144 Hz, PAL, broken vsync, refused forced vsync |
+  | `AudioResamplerTest` | the resampler |
+  | `GlfwGamepadsTest` | standard layout, triggers, stick, hats; uses `GLFWGamepadState.create()`, so no pad or window needed |
+  | `GamepadMappingTest` | the button mapping |
+  | `CoreBoundaryTest` | `jfc.core` imports |
+
+  Surefire runs with `--enable-native-access=ALL-UNNAMED` (pom `argLine`). The whole suite
+  is about 923 tests and takes about 10 s.
+- **Headless:**
+
+  ```
+  --screenshot <rom> <frames> out.png --video composite [--scanlines]
+  ```
+
+  Output is 602x448, with the burst phase taken from `frames % 3`.
+- **The real window from scripts** (see `development.md`, "Headless tools"):
+  - Launch with `java -jar ... --stats` and read the console output.
+  - Capture with `PrintWindow(hwnd, hdc, 2)` from DPI-aware PowerShell. `CopyFromScreen`
+    returns white. Capturing can stall the GL window for seconds (one capture caused a
+    6.8 s frame), so never capture while measuring timing.
+  - Press keys by tapping Alt with `keybd_event`, then `SetForegroundWindow`, then
+    `keybd_event` for the key.
+  - Zelda's title flashes white around frame 900. A white capture there is real.
+- **Lag hunting:** wrap the `VideoSink` in a scratch harness running the real
+  `EmulationSession` and log gaps over 25 ms. GC logs (`-Xlog:gc`) ruled out garbage
+  collection during the winmm investigation. Per-frame allocation is near zero: the session,
+  filter and audio reuse their arrays. Only a few tiny objects are made each frame (the
+  `Frame` record and `drawAndSwap`'s two `int[1]`), which is harmless.
+
+## 10. Where the plan and the code differ
+
+`m10-shader-plan.md` was written before the code. These parts of it are out of date:
+- **NTSC encode/decode passes:** the plan describes separate GPU "encode/decode" passes
+  (~683-wide signal texture). Instead, the shader is a port of `snes_ntsc`'s table-driven
+  blit: one pass, plus a present pass. That gives exact parity with the Java filter and
+  Snes9x.
+- **"Triple-buffer handoff" and "LWJGL window runs emulation on its own thread":** neither
+  exists. The OpenGL window does everything on the main thread, and Swing hands frames over
+  under a lock.
+- **`FramePacer`:** never created. Pacing lives in `LwjglWindow` and `PacingDecision`.
+- **"Swing paced by audio":** no longer true. Both windows use `FrameClock` or vsync, with
+  dynamic rate control for sound.
+- **`--gamepad-test` moving to GLFW:** this didn't happen. It still reads winmm.
+- **Shader location:** `src/main/resources/jfc/ui/lwjgl/shaders/`, not
+  `src/main/resources/shaders/`.
+- **CPU NTSC in the OpenGL window:** the plan offered it. The user saw no use for it, so
+  NTSC there runs on the GPU only.

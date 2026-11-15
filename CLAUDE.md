@@ -9,6 +9,9 @@ Read these before working on the project:
   before "fixing" behavior that looks odd.
 - `docs/development.md`: toolchain paths, build and test commands, headless tools,
   debugging techniques, user conventions.
+- `docs/frontend.md`: the windows, video, NTSC filter, shaders, pacing, sound and input
+  (`jfc.ui`), with their gotchas and known limits. Read it before touching `jfc.ui`, and
+  section 1 if you last worked before Milestone 10 (package move, raw frame buffer).
 
 ## Rules that apply every session
 
