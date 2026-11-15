@@ -21,6 +21,7 @@ import javax.swing.SwingUtilities;
 import jfc.cpu.io.JoypadPorts;
 import jfc.system.Snes;
 import jfc.ui.input.Gamepads;
+import jfc.video.SnesColor;
 
 /**
  * A Swing window that runs the emulator and shows its picture.
@@ -245,7 +246,7 @@ public final class EmulatorWindow {
     private void publishFrame() {
         int lines = snes.ppu().visibleLines();
         synchronized (imageLock) {
-            System.arraycopy(snes.ppu().frameBuffer(), 0, imagePixels, 0, 256 * lines);
+            SnesColor.toRgb(snes.ppu().frameBuffer(), imagePixels, 256 * lines);
             visibleLines = lines;
         }
         if (display != null) {

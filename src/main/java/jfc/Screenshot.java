@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import javax.imageio.ImageIO;
 import jfc.cartridge.Cartridge;
 import jfc.system.Snes;
+import jfc.video.SnesColor;
 
 /**
  * Runs a game without a window and saves a frame as a PNG. Handy for checking rendering
@@ -31,7 +32,9 @@ final class Screenshot {
         int width = 256;
         int height = snes.ppu().visibleLines();
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-        image.setRGB(0, 0, width, height, snes.ppu().frameBuffer(), 0, width);
+        int[] rgb = new int[width * height];
+        SnesColor.toRgb(snes.ppu().frameBuffer(), rgb, rgb.length);
+        image.setRGB(0, 0, width, height, rgb, 0, width);
         ImageIO.write(image, "png", output.toFile());
         System.out.println("Saved frame " + frames + " to " + output);
     }

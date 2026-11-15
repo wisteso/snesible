@@ -3,6 +3,7 @@ package jfc.ppu;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import jfc.system.MasterClock;
+import jfc.video.SnesColor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -200,6 +201,6 @@ class EffectsTest {
     }
 
     private int pixel(int x) {
-        return ppu.frameBuffer()[x];
+        return SnesColor.toRgb(ppu.frameBuffer()[x]);
     }
 }
