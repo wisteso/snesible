@@ -19,8 +19,8 @@ scanlines. `--video composite` (or `svideo`, `rgb`, `monochrome`, `rf`) and `--s
 them at startup.
 
 Gamepads (Windows only for now): the first pad plays as controller 1 alongside the keyboard,
-a second as controller 2 (plug both in before starting; a pad plugged in later is picked up only
-while no other pad is connected). If the face buttons are mixed up, run `--gamepad-test`, press each
+a second as controller 2. Pads are found at startup; after plugging one in later, press F9 to
+look for it (JFC doesn't look automatically, because each search stalls the game briefly). If the face buttons are mixed up, run `--gamepad-test`, press each
 button to see its number, and put the numbers in a `gamepad.properties` file in the working
 directory:
 

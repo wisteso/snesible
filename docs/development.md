@@ -87,7 +87,8 @@ J="$JAVA_HOME/bin/java"
 - **Window stutter**: wrap the `VideoSink` in a scratch harness that runs the real
   `EmulationSession` and logs gaps between `present()` calls over 25 ms; time suspects
   (input poll, audio write) the same way. GC logs (`-Xlog:gc`) ruled out garbage collection;
-  the cause was winmm stalling ~160 ms on queries of empty joystick slots (see `Gamepads`).
+  the cause was winmm stalling ~160 ms on queries of empty joystick slots, which an automatic
+  rescan every 2 s triggered (now on-demand with F9; see `Gamepads`).
 - Watch game RAM variables (e.g. SMW's `$0100` game mode) to tell game logic apart from
   emulator bugs.
 - Find code in a ROM by searching for instruction bytes (`od -An -tx1 -v | grep -ob`): byte

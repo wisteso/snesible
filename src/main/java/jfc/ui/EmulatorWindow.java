@@ -39,7 +39,8 @@ import jfc.video.VideoMode;
  *
  * <p>Keys: arrows = D-pad, X = A, Z = B, S = X, A = Y, Q = L, W = R, Enter = Start,
  * Shift or Backspace = Select, F2 = next picture mode (sharp pixels or one of the NTSC
- * filters), F3 = NTSC scanlines on/off, Escape = quit.
+ * filters), F3 = NTSC scanlines on/off, F9 = look for newly plugged-in gamepads,
+ * Escape = quit.
  *
  * <p>The window keeps the picture's shape when resized: 8:7 for sharp pixels (square SNES
  * pixels), and the NTSC filter's 602 x 448, which is close to a TV's 4:3.
@@ -57,6 +58,7 @@ public final class EmulatorWindow implements VideoSink {
               Select        Shift or Backspace
               Picture mode  F2 (sharp pixels, NTSC composite, S-Video, RGB, ...)
               Scanlines     F3 (with an NTSC mode)
+              Find gamepads F9 (after plugging one in)
               Quit          Escape""";
 
     private static final int SCALE = 3;
@@ -91,6 +93,9 @@ public final class EmulatorWindow implements VideoSink {
     private volatile boolean requestedScanlines;
     private VideoFilter filter;
 
+    /** What F9 does: look for newly plugged-in gamepads. */
+    private Runnable rescanDevices = () -> System.out.println("Gamepads aren't supported here.");
+
     private JFrame frame;
     private Display display;
 
@@ -111,6 +116,14 @@ public final class EmulatorWindow implements VideoSink {
      */
     public void open(Runnable onClose) {
         SwingUtilities.invokeLater(() -> createWindow(onClose));
+    }
+
+    /**
+     * Sets what F9 does: ask the gamepad code to look for newly plugged-in pads. (It doesn't
+     * look automatically, because the search briefly stalls the game.)
+     */
+    public void onRescanDevices(Runnable action) {
+        this.rescanDevices = action;
     }
 
     /** The keyboard, as buttons on controller 1. */
@@ -147,6 +160,11 @@ public final class EmulatorWindow implements VideoSink {
         if (e.getID() == KeyEvent.KEY_PRESSED && e.getKeyCode() == KeyEvent.VK_F2) {
             requestedMode = requestedMode.next();
             System.out.println("Picture: " + requestedMode.label());
+            return true;
+        }
+        if (e.getID() == KeyEvent.KEY_PRESSED && e.getKeyCode() == KeyEvent.VK_F9) {
+            System.out.println("Looking for gamepads...");
+            rescanDevices.run();
             return true;
         }
         if (e.getID() == KeyEvent.KEY_PRESSED && e.getKeyCode() == KeyEvent.VK_F3) {
