@@ -13,10 +13,16 @@ java -jar target/jfc-0.1.0-SNAPSHOT.jar "roms/Super Mario World.sfc"
 ```
 
 Keys: arrows = D-pad, X = A, Z = B, S = X, A = Y, Q = L, W = R, Enter = Start,
-Shift/Backspace = Select, Escape = quit. F2 cycles the picture mode (sharp pixels, or an NTSC
+Shift/Backspace = Select, Escape = quit, F11 = fullscreen. F2 cycles the picture mode (sharp pixels, or an NTSC
 TV filter for a composite, S-Video, RGB, black-and-white or RF connection) and F3 toggles NTSC
 scanlines. `--video composite` (or `svideo`, `rgb`, `monochrome`, `rf`) and `--scanlines` pick
 them at startup.
+
+The window uses OpenGL (through LWJGL) and paces itself to the display: locked to vsync on a
+60 or 120 Hz display, or a steady 60.10 Hz clock otherwise, which G-Sync/FreeSync displays show
+perfectly smoothly. `--swing` uses the simpler Swing window instead (also the automatic
+fallback without OpenGL 3.3); `--pacing vsync|clock` overrides the choice, `--refresh <hz>` asks
+for a refresh rate in fullscreen, and `--stats` prints timing each second.
 
 Gamepads (Windows only for now): the first pad plays as controller 1 alongside the keyboard,
 a second as controller 2. Pads are found at startup; after plugging one in later, press F9 to
@@ -97,6 +103,7 @@ mvn test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
 | `jfc.ui.video.ntsc` | Java port of Blargg's snes_ntsc NTSC filter (LGPL 2.1+)          |
 | `jfc.ui.input`  | Gamepads (winmm.dll through Java's Foreign Function API)              |
 | `jfc.ui.swing`  | Swing window and keyboard input                                       |
+| `jfc.ui.lwjgl`  | OpenGL window (LWJGL): drawing, keyboard, pacing to the display        |
 | `jfc.tools`     | Headless tools: header info, screenshots, audio recording, run reports |
 
 ## Roadmap
@@ -110,8 +117,9 @@ mvn test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
 7. ~~Real APU: SPC700 and DSP audio~~
 8. Debug and state-viewer tools
 
-In progress: an NTSC TV filter (done, in Java) and a move of video and input to LWJGL, for
-cross-platform gamepads and CRT shaders.
+In progress (Milestone 10): an NTSC TV filter (done, in Java) and an OpenGL window with
+display-synchronized pacing (done); next, the NTSC filter as GPU shaders, a CRT shader, and
+cross-platform gamepads through GLFW.
 
 ## Licensing note
 

@@ -8,22 +8,28 @@ import jfc.core.system.Snes;
 import jfc.ui.audio.AudioOutput;
 
 /**
- * Runs a console in real time: one frame after another on its own thread, with sound, battery
- * saves and input, sending each picture to a {@link VideoSink}.
+ * Runs a console in real time: one frame after another, with sound, battery saves and input,
+ * sending each picture to a {@link VideoSink}.
  *
  * <p>This is everything a playable emulator needs that isn't the console itself and isn't a
- * particular user interface. A window (Swing or OpenGL) only has to show frames and supply
- * buttons; it never touches the {@link Snes} directly.
+ * particular user interface. A window only has to show frames and supply buttons; it never
+ * touches the {@link Snes} directly.
  *
- * <h2>Pacing</h2>
- * Playing each frame's audio blocks while the sound device's short buffer is full, and the device
- * consumes exactly 32,000 samples a second, so audio is what keeps the emulator at the console's
- * real speed (about 60.1 frames per second on NTSC). Without a sound device the loop sleeps until
- * each frame is due instead.
+ * <h2>Who decides when a frame runs</h2>
+ * The session runs one frame per {@link #runFrame()} call and leaves the timing to its caller:
+ * <ul>
+ *   <li>{@link #start()} runs frames on a thread of its own, paced by a steady
+ *       {@link FrameClock} at the console's rate (the Swing window uses this).</li>
+ *   <li>A window that syncs to the display (the OpenGL window) calls {@link #powerOn()},
+ *       then {@link #runFrame()} from its own loop whenever the display wants a frame, then
+ *       {@link #powerOff()}.</li>
+ * </ul>
+ * Either way the sound adapts to the frames, not the other way round (see
+ * {@link AudioOutput}).
  *
  * <h2>Battery saves</h2>
  * Battery-backed SRAM is written to the save file shortly after the game changes it, and again
- * when the session stops. A real cartridge's battery keeps SRAM alive the whole time, so there's
+ * at {@link #powerOff()}. A real cartridge's battery keeps SRAM alive the whole time, so there's
  * no "save" step to imitate; we just keep the file up to date.
  */
 public final class EmulationSession {
@@ -42,8 +48,19 @@ public final class EmulationSession {
     private final List<InputSource> inputs;
     private final int[] sourceButtons = new int[PLAYERS];
     private final int[] combinedButtons = new int[PLAYERS];
+    private final short[] samples = new short[4096];
     private volatile boolean running = true;
-    private Thread thread;
+    private boolean printStats;
+
+    private AudioOutput audio;
+    private long frameNumber;
+
+    // Once-a-second measurements: frames run, and the longest and shortest gap between them.
+    private long windowStart;
+    private long lastFrameTime;
+    private int framesInWindow;
+    private long longestGap;
+    private long shortestGap = Long.MAX_VALUE;
 
     /**
      * @param saveFile where battery-backed SRAM is kept, or null for no saving
@@ -56,72 +73,73 @@ public final class EmulationSession {
         this.inputs = List.copyOf(inputs);
     }
 
-    /** Starts emulating on a new thread. Returns immediately. */
+    /** The console's frame rate: about 60.10 for NTSC, 50.01 for PAL. */
+    public double framesPerSecond() {
+        boolean pal = snes.cartridge().header().region().isPal();
+        return pal ? PAL_FRAMES_PER_SECOND : NTSC_FRAMES_PER_SECOND;
+    }
+
+    /** Prints timing and audio statistics once a second (the {@code --stats} option). */
+    public void setPrintStats(boolean printStats) {
+        this.printStats = printStats;
+    }
+
+    /**
+     * Starts emulating on a new thread, paced by a steady clock. Returns immediately; call
+     * {@link #stop()} to end it.
+     */
     public void start() {
         // Not a daemon thread: when the window closes, the JVM waits for this thread to leave
         // its loop and write the final save before exiting.
-        thread = new Thread(this::run, "emulation");
+        Thread thread = new Thread(() -> {
+            powerOn();
+            FrameClock clock = new FrameClock(framesPerSecond());
+            while (running) {
+                runFrame();
+                clock.waitForNextFrame();
+            }
+            powerOff();
+        }, "emulation");
         thread.start();
     }
 
-    /** Asks the emulation thread to finish its frame, write the save and exit. Returns at once. */
+    /** Asks the thread started by {@link #start()} to finish its frame, save and exit. */
     public void stop() {
         running = false;
     }
 
-    /**
-     * Runs frames at the console's real rate. Sleeping until each frame's deadline (instead of a
-     * fixed sleep) keeps the average rate exact even though individual frames vary in cost.
-     */
-    private void run() {
-        boolean pal = snes.cartridge().header().region().isPal();
-        long framePeriod = (long) (1_000_000_000L / (pal ? PAL_FRAMES_PER_SECOND : NTSC_FRAMES_PER_SECOND));
-        long nextFrameTime = System.nanoTime();
-        long fpsWindowStart = System.nanoTime();
-        int framesInWindow = 0;
-
-        AudioOutput audio = AudioOutput.open().orElse(null);
+    /** Opens the sound device, loads the battery save and resets the console. */
+    public void powerOn() {
+        audio = AudioOutput.open().orElse(null);
         if (audio == null) {
             System.out.println("No sound device available; running without sound.");
         }
-        short[] samples = new short[4096];
-
         loadSave();
         snes.reset();
-        long frameNumber = 0;
-        while (running) {
-            pollInputs();
-            snes.joypads().setPressed(0, combinedButtons[0]);
-            snes.joypads().setPressed(1, combinedButtons[1]);
-            snes.runFrame();
-            frameNumber++;
-            video.present(new Frame(snes.ppu().frameBuffer(), 256, snes.ppu().visibleLines(), frameNumber));
-            framesInWindow++;
-            if (frameNumber % SAVE_INTERVAL_FRAMES == 0) {
-                writeSaveIfChanged();
-            }
+        windowStart = System.nanoTime();
+        lastFrameTime = windowStart;
+    }
 
-            int sampleCount = snes.apu().drainSamples(samples);
-            long now;
-            if (audio != null) {
-                audio.play(samples, sampleCount); // blocks while the device's buffer is full
-                now = System.nanoTime();
-            } else {
-                nextFrameTime += framePeriod;
-                now = System.nanoTime();
-                if (now < nextFrameTime) {
-                    sleepNanos(nextFrameTime - now);
-                } else if (now - nextFrameTime > 5 * framePeriod) {
-                    nextFrameTime = now; // fell far behind (e.g. a pause): don't try to catch up
-                }
-            }
-
-            if (now - fpsWindowStart >= 1_000_000_000L) {
-                video.showFramesPerSecond(framesInWindow);
-                framesInWindow = 0;
-                fpsWindowStart = now;
-            }
+    /** Runs one frame: read the buttons, emulate, show the picture, play the sound. */
+    public void runFrame() {
+        pollInputs();
+        snes.joypads().setPressed(0, combinedButtons[0]);
+        snes.joypads().setPressed(1, combinedButtons[1]);
+        snes.runFrame();
+        frameNumber++;
+        video.present(new Frame(snes.ppu().frameBuffer(), 256, snes.ppu().visibleLines(), frameNumber));
+        if (frameNumber % SAVE_INTERVAL_FRAMES == 0) {
+            writeSaveIfChanged();
         }
+        int sampleCount = snes.apu().drainSamples(samples);
+        if (audio != null) {
+            audio.play(samples, sampleCount);
+        }
+        measure();
+    }
+
+    /** Closes the sound device and writes the final save. */
+    public void powerOff() {
         if (audio != null) {
             audio.close();
         }
@@ -138,6 +156,30 @@ public final class EmulationSession {
                 combinedButtons[player] |= sourceButtons[player];
             }
         }
+    }
+
+    /** Tracks the frame rate and gaps, reporting once a second. */
+    private void measure() {
+        long now = System.nanoTime();
+        long gap = now - lastFrameTime;
+        lastFrameTime = now;
+        longestGap = Math.max(longestGap, gap);
+        shortestGap = Math.min(shortestGap, gap);
+        framesInWindow++;
+        if (now - windowStart < 1_000_000_000L) {
+            return;
+        }
+        video.showFramesPerSecond(framesInWindow);
+        if (printStats) {
+            System.out.printf("%d fps, frame gaps %.1f-%.1f ms%s%n", framesInWindow,
+                    shortestGap / 1e6, longestGap / 1e6,
+                    audio == null ? "" : String.format(", audio buffer %.0f%%, rate %+.2f%%, dropped %d bytes",
+                            audio.averageFill() * 100, (audio.ratio() - 1) * 100, audio.droppedBytes()));
+        }
+        framesInWindow = 0;
+        longestGap = 0;
+        shortestGap = Long.MAX_VALUE;
+        windowStart = now;
     }
 
     private void loadSave() {
@@ -159,14 +201,6 @@ public final class EmulationSession {
             snes.cartridge().saveSramTo(saveFile);
         } catch (IOException e) {
             System.err.println("Couldn't write save file " + saveFile + ": " + e.getMessage());
-        }
-    }
-
-    private static void sleepNanos(long nanos) {
-        try {
-            Thread.sleep(nanos / 1_000_000, (int) (nanos % 1_000_000));
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         }
     }
 }

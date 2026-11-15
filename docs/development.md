@@ -46,11 +46,14 @@ failure details.
 | `SnesTest` | memory map, access timing, frame length, NMI, V-IRQ, DMA, HDMA incl. mid-frame enable (hand-assembled programs) |
 | `PpuPortsTest`, `RendererTest`, `EffectsTest` | VRAM/CGRAM/OAM ports, layers, sprites, priorities, color math, windows, Mode 7, mosaic, offset-per-tile |
 | `ApuTest`, `DspTest` | boot ROM upload protocol, timers, voice playback, ENDX, key off |
+| `GlRendererTest` | the OpenGL path in a hidden window: every pixel matches `SnesColor`; the NTSC picture is drawn as filtered (skipped without OpenGL 3.3) |
+| `PacingDecisionTest` | which pacing the OpenGL window picks for 60, 59.94, 120, 144 Hz, PAL, broken vsync |
+| `AudioResamplerTest` | dynamic rate control: exact at ratio 1, the right length at 1.005, no clicks between chunks |
 | `CoreBoundaryTest` | `jfc.core` imports no Swing, AWT, LWJGL, `jfc.ui` or `jfc.tools` |
 | `VideoFilterTest` | sharp-pixel conversion; NTSC filter: size, flat colors, composite vs S-Video artifacts, burst phase per line and frame, scanlines, brightness |
 | `ArithmeticUnitTest`, `JoypadPortsTest`, `GamepadMappingTest` | small units |
 
-The total is about 906 tests, taking about 10 s.
+The total is about 919 tests, taking about 10 s.
 
 ## Headless tools (essential for checking work without seeing or hearing it)
 
@@ -62,14 +65,24 @@ J="$JAVA_HOME/bin/java"
 "$J" -cp target/classes jfc.Main --screenshot "roms/X.sfc" 700 out.png --video composite  # NTSC filter
 "$J" -cp target/classes jfc.Main --record-audio "roms/X.sfc" 1800 out.wav START@1300
 "$J" -jar target/jfc-0.1.0-SNAPSHOT.jar --gamepad-test                  # needs the user to press buttons
-"$J" -jar target/jfc-0.1.0-SNAPSHOT.jar "roms/X.sfc"                    # the real window (user-facing)
+"$J" -jar target/jfc-0.1.0-SNAPSHOT.jar "roms/X.sfc" --stats            # the OpenGL window, timing each second
+"$J" -jar target/jfc-0.1.0-SNAPSHOT.jar "roms/X.sfc" --swing            # the Swing window
 ```
 
 - Read screenshot PNGs with the Read tool to check rendering. NTSC screenshots are 602 x 448;
   crop and enlarge a region (a tiny scratch Java program) to see the artifacts.
 - To capture the real window, `CopyFromScreen` returns a blank white client area (Java2D
   draws through Direct3D). Use `PrintWindow(hwnd, hdc, 2)` from a DPI-aware PowerShell
-  (`SetProcessDPIAware`) instead.
+  (`SetProcessDPIAware`) instead; it works for the OpenGL window too, fullscreen included.
+- To press keys in the window from PowerShell, `SendKeys` doesn't reach it; tap Alt with
+  `keybd_event` (Windows then allows `SetForegroundWindow`), then send the key with
+  `keybd_event`.
+- `--stats` prints, each second: frames run, the shortest and longest gap between frames, the
+  audio buffer level, the rate-control adjustment and any dropped audio. Expect 61 fps, gaps
+  near 16.6 ms and a buffer near 50% once the JIT has warmed up (the first two seconds have
+  gaps up to ~33 ms).
+- `java -cp target/classes` has no LWJGL (it lives in `target/lib`); the headless tools don't
+  need it, and playing falls back to the Swing window. Use `java -jar` for the OpenGL window.
 - Scripted presses hold for 6 frames. Useful SMW script: `START@320 START@450 START@600`
   reaches the opening message; it can be dismissed only after about frame 1450 (see
   hardware-notes).
@@ -101,8 +114,9 @@ J="$JAVA_HOME/bin/java"
   logic isn't obvious (bit tricks, timing quirks, wraparound). The user explicitly asked for
   this to continue.
 - Readability first, speed second (it currently runs about 10x real time, so there's headroom).
-- No dependencies beyond the JDK for the emulator itself (Gson is test-scope only). LWJGL is
-  planned later for video and input.
+- No dependencies beyond the JDK for the emulator itself (Gson is test-scope only). LWJGL
+  3.4.3 (GLFW, OpenGL) is the one runtime dependency, used only by `jfc.ui.lwjgl`; Maven copies
+  it to `target/lib` and the jar's manifest lists it, so `java -jar` works.
 - Commit at the end of each milestone (the user has approved this pattern), with a descriptive
   body and the `Co-Authored-By` trailer. Don't commit ROMs, test data or saves.
 - Don't embed copyrighted console code (hence the clean-room APU boot ROM).

@@ -20,8 +20,8 @@ import jfc.ui.input.JoystickState;
  * per-frame read of the pad being played with. JFC used to look every two seconds, which froze
  * the game for ten frames every two seconds (measured on the user's machine). Many SNES games
  * are timing-sensitive, so the search only happens on request: one deliberate pause instead of
- * a regular one. (The planned LWJGL window reads pads through GLFW, which is told about new
- * devices by the system.)
+ * a regular one. (Milestone 10f will read pads through GLFW in the OpenGL window; GLFW is
+ * told about new devices by the system.)
  *
  * <p>This class and {@link WinmmJoysticks} are the only code that knows how gamepads are read
  * through Windows' winmm. It's an {@link InputSource}, so the emulation session polls it the

@@ -25,13 +25,14 @@ headless tools. `jfc.Main` only reads the command line and starts one of them.
 | `jfc.core.coprocessor.sa1` | SA-1 | `Sa1` (board: both address maps, registers, interrupts, DMA, bit reader, catch-up), `SuperMmc` (ROM banking), `Sa1Arithmetic` |
 | `jfc.core.coprocessor.superfx` | SuperFX / GSU | `SuperFx` (board: both address maps, registers, catch-up), `Gsu` (the RISC core), `PlotUnit` (PLOT/RPIX), `GsuBus` |
 | `jfc.core.system`    | The console | `Snes` (wiring and frame loop), `MasterClock`, `WorkRam` |
-| `jfc.ui`        | The boundary between console and user interface: runs a console in real time (frame loop, pacing, saves, input polling) | `EmulationSession`, `VideoSink`, `InputSource`, `Frame` |
-| `jfc.ui.audio`  | Sound output | `AudioOutput` |
+| `jfc.ui`        | The boundary between console and user interface: runs a console in real time (frame loop, saves, input polling), plus what every window shares | `EmulationSession`, `VideoSink`, `InputSource`, `Frame`, `FrameClock`, `PacingMode`, `PlayOptions`, `Controls` |
+| `jfc.ui.audio`  | Sound output with dynamic rate control | `AudioOutput`, `AudioResampler` |
 | `jfc.ui.video`  | Turning PPU pixels into a picture: plain RGB, or the NTSC filter | `SnesColor`, `VideoFilter`, `VideoMode` |
 | `jfc.ui.video.ntsc` | Java port of Blargg's `snes_ntsc` (**LGPL 2.1+**, kept separate) | `SnesNtsc`, `NtscSetup` |
 | `jfc.ui.input`  | Gamepad button mapping, shared by every gamepad reader | `GamepadMapping`, `JoystickState` |
 | `jfc.ui.input.winmm` | Windows gamepads through winmm.dll (an `InputSource`) | `Gamepads`, `WinmmJoysticks` |
-| `jfc.ui.swing`  | The Swing window (a `VideoSink`) and its keyboard | `SwingWindow`, `SwingKeyboard` |
+| `jfc.ui.swing`  | The Swing window (a `VideoSink`) and its keyboard; `--swing`, and the fallback | `SwingWindow`, `SwingKeyboard` |
+| `jfc.ui.lwjgl`  | The OpenGL window (GLFW via LWJGL, the default): drawing, keyboard, pacing to the display | `LwjglWindow`, `GlRenderer`, `GlfwKeyboard`, `PacingDecision` |
 
 ## Timing model: "the CPU drives everything"
 
@@ -129,23 +130,43 @@ the two CPUs closely interleaved.
    plain RGB, `jfc.ui.video.VideoFilter` for the NTSC filter), so a filter or shader gets the
    exact SNES color even during fades.
 
-## Frame loop and threads (`EmulationSession`)
+## Frame loop, threads and pacing
 
 The boundary between the console and any user interface is two interfaces in `jfc.ui`:
 `VideoSink.present(Frame)` receives each finished picture and `InputSource.poll(int[])`
-supplies buttons. `EmulationSession` owns the `Snes` and runs it; the Swing window
-(`SwingWindow`) is one implementation, and the planned LWJGL window will be another.
+supplies buttons. `EmulationSession` owns the `Snes`; `runFrame()` runs one frame: poll every
+`InputSource` and OR their buttons per player, emulate, hand the frame to the `VideoSink`, play
+the frame's audio. A `Frame`'s pixel array is the PPU's own buffer, valid only during
+`present()`. Battery SRAM is saved about once a second when changed, and on exit (atomic
+temp-file move).
 
-- **Emulation thread** (`EmulationSession`, non-daemon, so it can write the final save on
-  exit): poll every `InputSource` and OR their buttons per player, `runFrame()`, hand the
-  frame to the `VideoSink`, drain the audio and play it. `AudioOutput.play` blocks while the
-  sound card's ~64 ms buffer is full, and **that's what paces the emulator**. Without a sound
-  device it falls back to sleeping until each frame's deadline.
-- A `Frame`'s pixel array is the PPU's own buffer, valid only during `present()`. The Swing
-  window draws it through its current `VideoFilter` into an image under a lock.
-- **Swing event thread**: paints the image and turns keys into buttons through a global
-  `KeyEventDispatcher`, stored in an `AtomicInteger` (the keyboard `InputSource` reads it).
-- Battery SRAM is saved about once a second when changed, and on exit (atomic temp-file move).
+**Who calls `runFrame()`, and when:**
+- **OpenGL window** (`LwjglWindow`, the default): everything on the main thread, which GLFW
+  and OpenGL require. One loop: handle window events, run a frame, draw it (`GlRenderer`),
+  `glfwSwapBuffers` with vsync on. It measures the display's real refresh rate by timing swaps
+  (GLFW reports whole numbers, and timing also catches vsync forced off), then `PacingDecision`
+  picks: **locked to vsync** (one frame every N refreshes) when the rate is within 0.5% of a
+  multiple of 60.10 Hz, else a **steady clock** (`FrameClock`) at the console's rate with each
+  frame shown as soon as it's drawn, which a G-Sync/FreeSync display turns into exact,
+  smooth 60.10 Hz. It re-measures on F11 and when the window moves to another monitor.
+- **Swing window**: an "emulation" thread (non-daemon, so it can write the final save) runs
+  frames paced by a `FrameClock`. Swing's event thread paints the image and passes keys to
+  `SwingKeyboard` (an `AtomicInteger` the emulation thread reads).
+
+**Sound never sets the pace.** `AudioOutput` keeps the device buffer (128 ms) about half full
+by resampling each frame's audio by at most 0.5% (dynamic rate control, `AudioResampler`), so
+writes return at once. It used to be the other way round (blocking writes paced the
+emulator), but the device frees space in ~30 ms chunks, so frames arrived up to 35 ms apart.
+After a pause (window drag, display measurement, fullscreen switch) the buffer is topped up
+with silence instead of creeping back. Measured with `--stats`: frame gaps 16.0-17.5 ms, the
+buffer settling at ~50%, nothing dropped.
+
+**Rendering (`GlRenderer`)**: sharp pixels upload the raw 19-bit PPU values into a `GL_R32UI`
+texture and `snes-pixels.frag` converts them with the same integer maths as `SnesColor`
+(`GlRendererTest` reads the pixels back and compares all of them). NTSC modes upload the Java
+filter's RGB output and scale it bilinearly. Shaders live in
+`src/main/resources/jfc/ui/lwjgl/shaders/`. LWJGL is told to use its FFM memory backend
+(`Configuration.MEMORY_BACKEND = "ffm"`), which avoids the JVM's `sun.misc.Unsafe` warnings.
 
 ## NTSC filter (`jfc.ui.video.ntsc`)
 
@@ -166,6 +187,6 @@ So `InterruptControl` is created first and then `interrupts.connect(cpu)` once t
 
 ## Planned direction
 
-Milestone 10 (in progress, see `docs/m10-shader-plan.md`) adds an **LWJGL** window as a second
-`VideoSink`, with GPU shaders and GLFW keyboard/gamepads, while the Swing window stays as a
-fallback. The core (`jfc.core.system` and below) must not depend on Swing or LWJGL.
+Milestone 10 continues (see `docs/m10-shader-plan.md`): 10d moves the NTSC filter onto the
+GPU as shader passes, 10e adds a CRT pass, 10f reads gamepads through GLFW in the OpenGL
+window. The core (`jfc.core`) must not depend on Swing or LWJGL (`CoreBoundaryTest`).
