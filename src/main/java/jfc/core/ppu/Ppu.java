@@ -185,9 +185,26 @@ public final class Ppu {
     }
 
     /**
-     * The finished picture: 256 x {@link Renderer#MAX_LINES} pixels. Each is the PPU's raw
-     * output, {@code brightness << 15 | bgr15} (master brightness 0-15 above a 15-bit color);
-     * {@code jfc.ui.video.SnesColor} turns it into RGB.
+     * The finished picture, as the PPU outputs it: not RGB, but each pixel's 15-bit color with
+     * the master brightness that applies to it.
+     *
+     * <p><b>Pixels.</b> Each {@code int} is {@code brightness << 15 | bgr15}:
+     * <pre>
+     *   bits 18-15  master brightness, 0 (black) to 15 (full)
+     *   bits 14-0   color, 0bbbbbgggggrrrrr (5 bits per channel, as in CGRAM)
+     * </pre>
+     * The higher bits are always 0. A forced-blank line is all 0 (black). Turning pixels into
+     * RGB is the display's job: {@code jfc.ui.video.SnesColor} does the plain conversion, and
+     * the NTSC filter and the OpenGL shaders read the raw values. ({@code Renderer.withBrightness}
+     * explains why the core stops here.)
+     *
+     * <p><b>Layout.</b> Row after row, 256 pixels each, room for {@link Renderer#MAX_LINES}
+     * rows; only the first {@link #visibleLines()} rows (224, or 239 with overscan) belong to the
+     * current picture.
+     *
+     * <p><b>Lifetime.</b> This is the PPU's own array, not a copy: the renderer draws into it
+     * line by line while a frame runs, so read it between frames (after
+     * {@code Snes.runFrame()} returns) and copy what you need to keep.
      */
     public int[] frameBuffer() {
         return renderer.frameBuffer();

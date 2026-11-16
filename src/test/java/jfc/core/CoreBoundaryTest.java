@@ -16,6 +16,21 @@ import org.junit.jupiter.api.Test;
  * use Swing, AWT, LWJGL or the {@code jfc.ui} and {@code jfc.tools} packages. The UI depends
  * on the core, never the other way round, which is what lets Swing and LWJGL windows (and the
  * headless tools) share one emulator.
+ *
+ * <p><b>What it checks.</b> Every line of every source file under {@code src/main/java/jfc/core}:
+ * an {@code import} (or {@code import static}) of a forbidden package fails, and so does a
+ * fully qualified use in code, such as {@code javax.swing.JFrame f}.
+ *
+ * <p><b>What's allowed.</b> Comments may <i>mention</i> UI classes: core Javadoc points to
+ * {@code jfc.ui.video.SnesColor} to say who turns the frame buffer into RGB, which documents the
+ * boundary without crossing it. Lines starting with {@code *} or {@code //} are skipped for
+ * that reason.
+ *
+ * <p><b>Limits.</b> It's a plain text scan, not a parser, chosen to stay simple and
+ * dependency-free. It would flag a forbidden name inside a string literal or in a trailing
+ * {@code //} comment after code, and it would miss a use hidden behind reflection
+ * ({@code Class.forName("javax.swing...")}). Both are unlikely in emulation code, and a false
+ * alarm is easy to look at.
  */
 class CoreBoundaryTest {
 
