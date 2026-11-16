@@ -71,6 +71,11 @@ public final class LwjglWindow implements VideoSink {
     /** If vsync seems not to work, measure again this much later, up to this many times. */
     private static final long RECHECK_DELAY_NANOS = 2_000_000_000L;
     private static final int MAX_RECHECKS = 3;
+    /**
+     * How far the borderless fullscreen window reaches past each edge of the monitor, in
+     * pixels (see {@link #toggleFullscreen}). The picture is drawn inside that margin.
+     */
+    private static final int BORDERLESS_OVERHANG = 1;
 
     private final String title;
     private final PlayOptions options;
@@ -93,6 +98,8 @@ public final class LwjglWindow implements VideoSink {
     private int recheckCount;
     private long monitorAtLastCheck = NULL;
 
+    /** In fullscreen (borderless or exclusive). */
+    private boolean fullscreen;
     // The windowed position and size, restored when leaving fullscreen.
     private final int[] windowedX = new int[1];
     private final int[] windowedY = new int[1];
@@ -244,7 +251,10 @@ public final class LwjglWindow implements VideoSink {
         int[] width = new int[1];
         int[] height = new int[1];
         glfwGetFramebufferSize(window, width, height);
-        renderer.draw(width[0], height[0]);
+        // Borderless fullscreen reaches one pixel past each edge of the screen; keep the
+        // picture inside what's visible.
+        int margin = fullscreen && !options.exclusiveFullscreen() ? BORDERLESS_OVERHANG : 0;
+        renderer.draw(width[0], height[0], margin);
         glfwSwapBuffers(window);
     }
 
@@ -359,30 +369,59 @@ public final class LwjglWindow implements VideoSink {
     }
 
     /**
-     * Switches between a window and fullscreen on the monitor the window is on. Fullscreen uses
-     * the monitor's resolution and, if {@code --refresh} was given, that refresh rate (on a
-     * 144 Hz display without G-Sync/FreeSync, 120 Hz gives perfectly even frames). It's
-     * exclusive fullscreen, where variable refresh works with the drivers' default settings.
+     * Switches between a window and fullscreen on the monitor the window is on, in one of two
+     * ways ({@code --fullscreen}):
      *
-     * <p>Each switch blanks the screen for a few seconds while the monitor re-syncs, and
-     * drawing waits meanwhile (about 4 s on the user's G-Sync display; the switch call itself
-     * takes 10-20 ms). A borderless window covering the screen was tried too and paused just as
-     * long: Windows treats it as fullscreen and changes presentation mode the same way.
+     * <p><b>Borderless</b> (the default): a window without a frame, covering the monitor and
+     * one pixel more on every side. The switch is instant. Why the extra pixel: when a window
+     * covers a monitor <i>exactly</i>, Windows hands it the display directly ("independent
+     * flip", the same as exclusive fullscreen), and that change of presentation path makes a
+     * G-Sync monitor re-sync, a blank screen for about 4 s on the user's display. A window that
+     * doesn't fit the monitor exactly stays with the desktop compositor, so nothing changes for
+     * the monitor. It must be larger, not smaller: Windows hides the taskbar only for a
+     * foreground window that covers the whole monitor (one pixel short, the taskbar stayed in
+     * front; checked with screen captures). The cost: the compositor is in the way, so
+     * G-Sync/FreeSync works here only if the driver allows it for windows (NVIDIA: "Enable
+     * G-SYNC for windowed and full screen mode"); otherwise the steady clock judders slightly
+     * on a 144 Hz display.
+     *
+     * <p><b>Exclusive</b>: GLFW's real fullscreen, at the monitor's resolution and, if
+     * {@code --refresh} was given, that refresh rate (on a 144 Hz display without
+     * G-Sync/FreeSync, 120 Hz gives perfectly even frames). Variable refresh works with the
+     * drivers' default settings, but each switch blanks the screen while the monitor re-syncs
+     * (measured: swaps stall for up to ~2.3 s after the switch; the blank looks longer).
      */
     private void toggleFullscreen() {
-        if (glfwGetWindowMonitor(window) == NULL) {
+        if (!fullscreen) {
             glfwGetWindowPos(window, windowedX, windowedY);
             glfwGetWindowSize(window, windowedWidth, windowedHeight);
             long monitor = currentMonitor();
             GLFWVidMode desktop = glfwGetVideoMode(monitor);
-            int refresh = options.fullscreenRefresh() > 0 ? options.fullscreenRefresh() : desktop.refreshRate();
-            glfwSetWindowMonitor(window, monitor, 0, 0, desktop.width(), desktop.height(), refresh);
+            if (options.exclusiveFullscreen()) {
+                int refresh = options.fullscreenRefresh() > 0 ? options.fullscreenRefresh() : desktop.refreshRate();
+                glfwSetWindowMonitor(window, monitor, 0, 0, desktop.width(), desktop.height(), refresh);
+            } else {
+                int[] mx = new int[1];
+                int[] my = new int[1];
+                glfwGetMonitorPos(monitor, mx, my);
+                glfwSetWindowAttrib(window, GLFW_DECORATED, GLFW_FALSE);
+                // Past the monitor's edges on every side (see above).
+                glfwSetWindowMonitor(window, NULL, mx[0] - BORDERLESS_OVERHANG, my[0] - BORDERLESS_OVERHANG,
+                        desktop.width() + 2 * BORDERLESS_OVERHANG, desktop.height() + 2 * BORDERLESS_OVERHANG,
+                        GLFW_DONT_CARE);
+            }
         } else {
+            glfwSetWindowAttrib(window, GLFW_DECORATED, GLFW_TRUE);
             glfwSetWindowMonitor(window, NULL, windowedX[0], windowedY[0],
                     windowedWidth[0], windowedHeight[0], GLFW_DONT_CARE);
         }
+        fullscreen = !fullscreen;
         glfwSwapInterval(1);
-        pacingNeedsCheck = true; // the refresh rate may have changed
+        if (options.exclusiveFullscreen()) {
+            pacingNeedsCheck = true; // the refresh rate may have changed
+        }
+        // Borderless stays on the same monitor at the same refresh rate, so there's nothing to
+        // re-measure (which would pause the game for ~0.4 s).
     }
 
     /** The monitor showing the window: its fullscreen monitor, or the one under its center. */

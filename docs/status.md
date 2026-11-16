@@ -82,10 +82,16 @@ Each is documented where it lives in the code.
 - Verified on the user's machine (two 2560x1440 144 Hz G-Sync monitors, NVIDIA), driving it
   from scripts: picks the steady clock at 143.9 Hz, frame gaps 16.0-17.5 ms windowed and
   16.3-17.0 ms fullscreen, audio buffer settling at ~50% with nothing dropped, F2/F11 work,
-  GPU colors identical to `SnesColor` (`GlRendererTest`). The user hasn't played with it yet.
-- Each fullscreen switch (F11) blanks the screen for ~4 s while the monitor re-syncs; the
-  switch call takes 10-20 ms, the swaps after it block. A borderless window covering the
-  screen paused just as long (Windows treats it as fullscreen), so that option was dropped.
+  GPU colors identical to `SnesColor` (`GlRendererTest`). The user has since played a few games with it ("everything seems fine").
+- Fullscreen (F11) is now a borderless window 1 px larger than the screen on each side,
+  which switches instantly (the user asked for this; exclusive stays as
+  `--fullscreen exclusive`). Exclusive fullscreen blanks the screen for ~4 s while the G-Sync
+  monitor re-syncs, and so does a borderless window that exactly covers the screen; one 1 px
+  short leaves the taskbar in front. Details in `frontend.md`. The user confirmed borderless
+  was "very quick" in a test program; checked in the game with screen captures (no taskbar,
+  picture fills the visible screen, frame gaps at most ~30 ms around the switch).
+- The user has play-tested the OpenGL window (2026-11-15): "everything seems fine", on a few
+  games.
 - `--refresh 120` in fullscreen still measured 144 Hz: the NVIDIA driver apparently keeps the
   highest refresh rate ("Preferred refresh rate: Highest available"). So the locked-to-vsync
   path hasn't run on real hardware yet; `PacingDecisionTest` covers the decision, and the

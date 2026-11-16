@@ -149,7 +149,9 @@ temp-file move).
   picks: **locked to vsync** (one frame every N refreshes) when the rate is within 0.5% of a
   multiple of 60.10 Hz, else a **steady clock** (`FrameClock`) at the console's rate with each
   frame shown as soon as it's drawn, which a G-Sync/FreeSync display turns into exact,
-  smooth 60.10 Hz. It re-measures on F11 and when the window moves to another monitor.
+  smooth 60.10 Hz. It re-measures on an exclusive-fullscreen switch and when the window moves to another
+  monitor. F11 defaults to a borderless window slightly larger than the screen, which
+  switches instantly (`frontend.md` explains why).
 - **Swing window**: an "emulation" thread (non-daemon, so it can write the final save) runs
   frames paced by a `FrameClock`. Swing's event thread paints the image and passes keys to
   `SwingKeyboard` (an `AtomicInteger` the emulation thread reads).
