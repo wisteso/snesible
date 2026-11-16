@@ -299,8 +299,10 @@ saved position and size. `toggleFullscreen(Fullscreen kind)` tracks the state in
   structure. At non-integer scales (1440 / 224 = 6.43 px per line) the profile is evaluated
   per pixel, so there are no hard moiré bands. Some lines do fall slightly differently on
   the pixel grid.
-- **Still to do from the 10e plan:** shadow/slot/aperture mask, curvature, and maybe a
-  brightness boost to offset the darkening. Snes9x-style scanlines remain in Swing and
+- **Still to do from the 10e plan:** a shadow/slot/aperture mask (optional; marginal at
+  1440p, since a TV's ~650 slot columns give only 3-4 screen pixels per RGB triad), and
+  maybe a brightness boost to offset the darkening. The user said no tuning is needed ("the
+  new scanlines look better than the old ones") and **doesn't want screen curvature**. Snes9x-style scanlines remain in Swing and
   screenshots.
 
 ### The NTSC shader in detail (`snes-ntsc.frag`, LGPL)
@@ -449,8 +451,8 @@ in the OpenGL window. Package: the M10 layout lists it as `jfc.ui.debug`, while
 user which one when M9 starts.
 
 **10e (CRT pass), partly done:** beam-profile scanlines replaced Snes9x-style scanlines in
-the OpenGL window (`crt-scanlines.frag`, section 4). Not done yet: mask, curvature, and any
-brightness compensation. They would go into the same shader or a pass after it. Keep the
+the OpenGL window (`crt-scanlines.frag`, section 4). Not done yet: a mask and any
+brightness compensation. Curvature was declined by the user. They would go into the same shader or a pass after it. Keep the
 top-down row convention described in section 4.
 
 ## 9. Testing and checking this code

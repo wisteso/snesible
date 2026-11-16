@@ -206,4 +206,4 @@ So `InterruptControl` is created first and then `interrupts.connect(cpu)` once t
 ## Planned direction
 
 Milestone 10's remaining step (see `docs/m10-shader-plan.md`) is the rest of 10e: the beam
-scanlines are done, while a mask and curvature are not. The core (`jfc.core`) must not depend on Swing or LWJGL (`CoreBoundaryTest`).
+scanlines are done, and a shadow mask is optional (the user doesn't want curvature). The core (`jfc.core`) must not depend on Swing or LWJGL (`CoreBoundaryTest`).
