@@ -125,7 +125,7 @@ mvn test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
 
 Milestone 10 (mostly done): an NTSC TV filter (in Java for Swing and screenshots, as a shader
 in the OpenGL window), an OpenGL window with display-synchronized pacing, and cross-platform
-gamepads through GLFW, and CRT-style scanlines. A shadow mask and curvature may follow.
+gamepads through GLFW, and CRT-style scanlines. A shadow mask may follow.
 
 ## Licensing note
 

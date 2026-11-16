@@ -19,7 +19,7 @@ play-test first). The frontend code is explained in `frontend.md`.
 | 8 | Coprocessors: SuperFX (Star Fox, Yoshi's Island) and SA-1 (Super Mario RPG) | see git log | done; the user played all three ("pretty much perfectly") |
 | - | Offset-per-tile in modes 2 and 4 (Star Fox horizon); GSU background ROM/RAM buffers | see git log | done |
 | 9 | Debug and state-viewer tools (plan below) | - | planned |
-| 10 | Move video and input to LWJGL; CRT/NTSC shaders (plan: `m10-shader-plan.md`) | branch `m10-video` | in progress: 10a (frontend boundary, 15-bit frame buffer), 10b (Java NTSC filter), 10c (package layout, OpenGL window, frame pacing), 10d (NTSC on the GPU) and 10f (GLFW gamepads) done; 10e (CRT pass) begun: beam-profile scanlines done, mask/curvature not |
+| 10 | Move video and input to LWJGL; CRT/NTSC shaders (plan: `m10-shader-plan.md`) | branch `m10-video` | in progress: 10a (frontend boundary, 15-bit frame buffer), 10b (Java NTSC filter), 10c (package layout, OpenGL window, frame pacing), 10d (NTSC on the GPU) and 10f (GLFW gamepads) done; 10e (CRT pass) begun: beam-profile scanlines done (the user likes them), mask optional, curvature declined by the user |
 
 ## What the user has confirmed by playing
 
@@ -96,7 +96,7 @@ Each is documented where it lives in the code.
   every picture mode (10e's first part; the user asked for "improved scanlines"). They stay
   fixed from frame to frame, as 240p does. The user asked about alternating even and odd
   lines, which imitates 480i (interlace mode only). Checked with `GlRendererTest` and
-  renders of Super Mario World; the user hasn't seen them yet.
+  renders of Super Mario World. The user: "look better than the old ones", no tuning needed.
 - `--refresh 120` in fullscreen still measured 144 Hz: the NVIDIA driver apparently keeps the
   highest refresh rate ("Preferred refresh rate: Highest available"). So the locked-to-vsync
   path hasn't run on real hardware yet; `PacingDecisionTest` covers the decision, and the
