@@ -2,8 +2,6 @@ package jfc.ui.lwjgl;
 
 import static org.lwjgl.glfw.GLFW.*;
 
-import java.nio.ByteBuffer;
-import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import jfc.core.cpu.io.JoypadPorts;
@@ -109,7 +107,8 @@ final class GlfwGamepads implements InputSource {
         if (glfwJoystickIsGamepad(jid) && glfwGetGamepadState(jid, gamepadState)) {
             return fromStandardLayout(gamepadState);
         }
-        return mapping.toSnesButtons(rawState(jid));
+        JoystickState state = GlfwJoysticks.rawState(jid);
+        return state == null ? 0 : mapping.toSnesButtons(state);
     }
 
     /** A known gamepad: buttons by position, D-pad or left stick for directions. */
@@ -151,23 +150,6 @@ final class GlfwGamepads implements InputSource {
 
     private static int held(GLFWGamepadState state, int button, int snesButton) {
         return state.buttons(button) == GLFW_PRESS ? snesButton : 0;
-    }
-
-    /** Any other joystick: its first two axes, its buttons as bits, its first hat as an angle. */
-    private static JoystickState rawState(int jid) {
-        FloatBuffer axes = glfwGetJoystickAxes(jid);
-        ByteBuffer buttons = glfwGetJoystickButtons(jid);
-        ByteBuffer hats = glfwGetJoystickHats(jid);
-        double x = axes != null && axes.limit() > 0 ? axes.get(0) : 0;
-        double y = axes != null && axes.limit() > 1 ? axes.get(1) : 0;
-        int bits = 0;
-        for (int i = 0; buttons != null && i < buttons.limit() && i < 32; i++) {
-            if (buttons.get(i) == GLFW_PRESS) {
-                bits |= 1 << i;
-            }
-        }
-        int pov = hats != null && hats.limit() > 0 ? hatDegrees(hats.get(0)) : -1;
-        return new JoystickState(x, y, bits, pov);
     }
 
     /** GLFW reports a hat as direction bits; JoystickState wants degrees clockwise from up. */

@@ -32,8 +32,8 @@ Gamepads: the first pad plays as controller 1 alongside the keyboard, a second a
 2. In the OpenGL window they work on any platform and can be plugged in or out at any time;
 pads GLFW knows (Xbox, PlayStation, Switch Pro, ...) use their standard layout, by position.
 The Swing window reads them through Windows' winmm only, finds them at startup, and looks
-for newly plugged-in ones when you press F9 (each search stalls the game briefly). If the face buttons are mixed up, run `--gamepad-test`, press each
-button to see its number, and put the numbers in a `gamepad.properties` file in the working
+for newly plugged-in ones when you press F9 (each search stalls the game briefly). If the face buttons are mixed up, run `--gamepad-test` (add `--swing`
+for the Swing window), press each button to see its number, and put the numbers in a `gamepad.properties` file in the working
 directory:
 
 ```properties

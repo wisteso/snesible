@@ -1,17 +1,28 @@
 package jfc.tools;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
 import jfc.core.cpu.io.JoypadPorts;
 import jfc.ui.input.GamepadMapping;
 import jfc.ui.input.JoystickState;
 import jfc.ui.input.winmm.WinmmJoysticks;
+import jfc.ui.lwjgl.GlfwJoysticks;
 
 /**
  * {@code --gamepad-test}: lists connected gamepads and prints every button press, so the right
  * button numbers can be put into {@code gamepad.properties}.
+ *
+ * <p>The two windows read pads differently, and a pad's button numbers can differ between the
+ * two, so the test reads them the way the chosen window does:
+ * <ul>
+ *   <li>By default through <b>GLFW</b>, like the OpenGL window. A pad GLFW knows (Xbox,
+ *       PlayStation, ...) is mapped by position and ignores {@code gamepad.properties}; the
+ *       test says so and shows the SNES buttons that result.</li>
+ *   <li>With {@code --swing}, through Windows' <b>winmm</b>, like the Swing window.</li>
+ * </ul>
  */
 public final class GamepadTest {
 
@@ -26,10 +37,62 @@ public final class GamepadTest {
     private GamepadTest() {
     }
 
-    public static void run(GamepadMapping mapping) throws IOException, InterruptedException {
+    /**
+     * @param winmm read pads through winmm (the Swing window's way) instead of GLFW
+     */
+    public static void run(GamepadMapping mapping, boolean winmm) throws InterruptedException {
+        if (winmm) {
+            runWinmm(mapping);
+            return;
+        }
+        GlfwJoysticks glfw;
+        try {
+            glfw = GlfwJoysticks.open().orElse(null);
+        } catch (LinkageError e) {
+            // Run with "java -cp target/classes" instead of "java -jar": no target/lib.
+            System.out.println("LWJGL isn't on the class path (use java -jar); add --swing to test through winmm.");
+            return;
+        }
+        if (glfw == null) {
+            System.out.println("GLFW couldn't start; add --swing to test through winmm.");
+            return;
+        }
+        try (glfw) {
+            runGlfw(glfw, mapping);
+        }
+    }
+
+    private static void runGlfw(GlfwJoysticks glfw, GamepadMapping mapping) throws InterruptedException {
+        System.out.println("Reading gamepads through GLFW, as the OpenGL window does (--swing: as the Swing window does).");
+        List<Integer> ids = glfw.connected();
+        if (ids.isEmpty()) {
+            System.out.println("No gamepads found. Plug one in and try again.");
+            return;
+        }
+        for (int jid : ids) {
+            System.out.println(glfw.describe(jid));
+        }
+        int jid = ids.get(0);
+        boolean standard = glfw.isGamepad(jid);
+        System.out.println();
+        System.out.println("Testing joystick " + jid + ". Press buttons; Ctrl+C to stop.");
+        if (standard) {
+            System.out.println("This pad is mapped by position (bottom face button = SNES B, right = A, left = Y, top = X);");
+            System.out.println("gamepad.properties doesn't apply to it. Device button numbers are shown for reference.");
+        } else {
+            System.out.println("Device button numbers are what gamepad.properties uses, e.g. START=7.");
+        }
+        watch(() -> {
+            glfw.pollEvents();
+            return GlfwJoysticks.rawState(jid);
+        }, state -> standard ? glfw.standardLayoutButtons(jid) : mapping.toSnesButtons(state));
+    }
+
+    private static void runWinmm(GamepadMapping mapping) throws InterruptedException {
+        System.out.println("Reading gamepads through winmm, as the Swing window does (without --swing: as the OpenGL window does).");
         WinmmJoysticks api = WinmmJoysticks.open().orElse(null);
         if (api == null) {
-            System.out.println("Gamepads are only supported on Windows for now.");
+            System.out.println("winmm is only available on Windows.");
             return;
         }
         List<WinmmJoysticks.DeviceInfo> devices = api.findDevices();
@@ -45,10 +108,20 @@ public final class GamepadTest {
         System.out.println();
         System.out.println("Testing joystick " + device.id() + ". Press buttons; Ctrl+C to stop.");
         System.out.println("Device button numbers are what gamepad.properties uses, e.g. START=7.");
+        watch(() -> api.poll(device), mapping::toSnesButtons);
+    }
 
+    /**
+     * Prints the pad's state whenever it changes, until it's unplugged.
+     *
+     * @param read     the pad's current raw state, or null once it's unplugged
+     * @param toSnes   the SNES buttons the window would see for a state
+     */
+    private static void watch(Supplier<JoystickState> read, ToIntFunction<JoystickState> toSnes)
+            throws InterruptedException {
         JoystickState previous = null;
         while (true) {
-            JoystickState state = api.poll(device);
+            JoystickState state = read.get();
             if (state == null) {
                 System.out.println("Disconnected.");
                 return;
@@ -57,7 +130,7 @@ public final class GamepadTest {
                 System.out.printf("device buttons %-14s  x=%5.2f y=%5.2f%s  ->  SNES %s%n",
                         buttonNumbers(state.buttons()), state.x(), state.y(),
                         state.pov() >= 0 ? " hat=" + state.pov() : "",
-                        snesNames(mapping.toSnesButtons(state)));
+                        snesNames(toSnes.applyAsInt(state)));
                 previous = state;
             }
             Thread.sleep(16);

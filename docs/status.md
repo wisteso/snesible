@@ -71,9 +71,12 @@ Each is documented where it lives in the code.
   composite, S-Video and RGB at a steady 61 fps; a mode switch costs one ~25 ms frame.
 - GLFW sees the user's Buffalo pad as a raw joystick (8 buttons, 2 axes; not in SDL's
   database), so it uses `GamepadMapping` with the defaults the user confirmed under winmm. It's
-  detected as controller 1, but button presses haven't been tested yet (the user was away);
-  if GLFW numbers the buttons differently from winmm, `gamepad.properties` fixes it.
-  `--gamepad-test` still reads winmm.
+  detected as controller 1, and the user confirmed its buttons are right in the OpenGL
+  window. `--gamepad-test` reads pads as the OpenGL window does (GLFW); with `--swing`, as
+  the Swing window does (winmm).
+- Optional future features (the user's list, not planned): a CRT shadow mask, 4:3 pixels
+  in sharp mode, adjustable NTSC settings. Screen curvature was declined. Details in
+  `frontend.md`, section 8.
 - The refresh measurement once came out wrong right after the window appeared (swaps not
   waiting yet); it now skips the first 20 swaps, waits for each with `glFinish`, and
   re-measures after 2 s if vsync still looks off. Three launches then measured 143.65-144.02 Hz.

@@ -33,7 +33,7 @@ headless tools. `jfc.Main` only reads the command line and starts one of them.
 | `jfc.ui.input`  | Gamepad button mapping, shared by every gamepad reader | `GamepadMapping`, `JoystickState` |
 | `jfc.ui.input.winmm` | Windows gamepads through winmm.dll for the Swing window (an `InputSource`; F9 rescans) | `Gamepads`, `WinmmJoysticks` |
 | `jfc.ui.swing`  | The Swing window (a `VideoSink`) and its keyboard; `--swing`, and the fallback | `SwingWindow`, `SwingKeyboard` |
-| `jfc.ui.lwjgl`  | The OpenGL window (GLFW via LWJGL, the default): drawing (NTSC on the GPU), keyboard, gamepads, pacing to the display | `LwjglWindow`, `GlRenderer`, `GlfwKeyboard`, `GlfwGamepads`, `PacingDecision` |
+| `jfc.ui.lwjgl`  | The OpenGL window (GLFW via LWJGL, the default): drawing (NTSC on the GPU), keyboard, gamepads, pacing to the display | `LwjglWindow`, `GlRenderer`, `GlfwKeyboard`, `GlfwGamepads`, `GlfwJoysticks`, `PacingDecision` |
 
 ## Timing model: "the CPU drives everything"
 
