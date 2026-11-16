@@ -5,9 +5,9 @@ package jfc.ui;
  * help text stays true.
  *
  * <p>Controller 1: arrows = D-pad, X = A, Z = B, S = X, A = Y, Q = L, W = R, Enter = Start,
- * Shift or Backspace = Select. Window keys: F2 = next picture mode, F3 = NTSC scanlines,
- * F9 = look for newly plugged-in gamepads (Swing window), F11 = fullscreen (OpenGL window),
- * Escape = quit.
+ * Shift or Backspace = Select. Window keys: F2 = next picture mode, F3 = scanlines,
+ * F9 = look for newly plugged-in gamepads (Swing window), F11 = borderless fullscreen and
+ * Alt+Enter = exclusive fullscreen (OpenGL window), Escape = quit.
  */
 public final class Controls {
 
@@ -21,9 +21,11 @@ public final class Controls {
               Start         Enter
               Select        Shift or Backspace
               Picture mode  F2 (sharp pixels, NTSC composite, S-Video, RGB, ...)
-              Scanlines     F3 (with an NTSC mode)
+              Scanlines     F3 (OpenGL window: CRT beams in any mode; Swing: NTSC modes only)
               Find gamepads F9 (Swing window; the OpenGL window finds them itself)
-              Fullscreen    F11 (OpenGL window)
+              Fullscreen    F11 = borderless, instant; Alt+Enter = exclusive, lowest latency
+                            (the screen blanks a few seconds while the monitor adjusts)
+                            (OpenGL window; either key goes back to the window)
               Quit          Escape""";
 
     private Controls() {

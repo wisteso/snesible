@@ -131,8 +131,8 @@ single thread is enough.
   Without the skip and the `glFinish`, the first launch once measured nonsense: right after
   a window appears, swaps return without waiting.
 - The window measures again on these events:
-  - F11 with `--fullscreen exclusive` (borderless doesn't change the refresh rate, so it
-    skips the measurement).
+  - Entering or leaving exclusive fullscreen (Alt+Enter). Borderless (F11) doesn't change
+    the refresh rate, so it skips the measurement.
   - Moving to another monitor: the position callback compares `currentMonitor()`, which is
     the monitor under the window's center.
   - Up to 3 times, 2 s apart, while vsync looks broken.
@@ -144,10 +144,14 @@ single thread is enough.
 - The console prints the decision ("Display: 143.9 Hz. Pacing: steady clock ...") and the
   title shows `NN fps (vsync|clock)`.
 
-### Fullscreen (F11)
-Two kinds, chosen with `--fullscreen borderless|exclusive`. Borderless is the default, at the
-user's request (2026-11-15). Leaving either kind restores the saved window position and size.
-- **Borderless (default): instant.** It's an undecorated window **1 px larger than the
+### Fullscreen (F11 and Alt+Enter)
+Two kinds, each on its own key (the user's choice, 2026-11-15): **F11 = borderless**,
+**Alt+Enter = exclusive**. In fullscreen, either key goes back to the window and restores its
+saved position and size. `toggleFullscreen(Fullscreen kind)` tracks the state in the
+`Fullscreen` enum (OFF, BORDERLESS, EXCLUSIVE). Alt+Enter is checked before keys reach
+`GlfwKeyboard`, because Enter is Start; Enter's release still reaches it, which is harmless.
+(For a while this was a `--fullscreen borderless|exclusive` option; the keys replaced it.)
+- **Borderless (F11): instant.** It's an undecorated window **1 px larger than the
   monitor on every side** (`BORDERLESS_OVERHANG`). `GlRenderer.draw` gets that margin, so the
   picture stays inside the visible screen; the overhang is black and off-screen. Why the
   extra pixel:
@@ -165,7 +169,9 @@ user's request (2026-11-15). Leaving either kind restores the saved window posit
   - The cost: frames go through the compositor, so G-Sync/FreeSync engages only if the
     driver allows it for windows (NVIDIA: "Enable G-SYNC for windowed and full screen
     mode"). Otherwise the steady clock shows the slight 2-3 refresh judder at 144 Hz.
-- **Exclusive (`--fullscreen exclusive`):** GLFW's real fullscreen at the desktop
+  - The compositor probably also adds up to one refresh of latency (~7 ms at 144 Hz). This
+    hasn't been measured; that would take a camera or a light sensor.
+- **Exclusive (Alt+Enter): lowest latency.** GLFW's real fullscreen at the desktop
   resolution of the window's current monitor, at `--refresh <hz>` if given, else the desktop
   rate. Variable refresh works with default driver settings.
   - **Every switch blanks the screen for about 4 s** on the user's G-Sync monitor. The
@@ -180,8 +186,9 @@ user's request (2026-11-15). Leaving either kind restores the saved window posit
 ### Keys (`handleKey`, `GlfwKeyboard`)
 - Window keys:
   - F2: next `VideoMode`.
-  - F3: scanlines.
-  - F11: fullscreen.
+  - F3: scanlines (the beam shader, any picture mode).
+  - F11: borderless fullscreen.
+  - Alt+Enter: exclusive fullscreen.
   - Esc: quit.
   - F9: only prints that the window finds gamepads by itself.
 - Everything else goes to `GlfwKeyboard`. Its key map matches `SwingKeyboard` and
@@ -237,10 +244,17 @@ user's request (2026-11-15). Leaving either kind restores the saved window posit
      per *emulated* frame, inside `present`/`upload`, not once per refresh.
   2. `rgb-picture.frag` draws that texture into the window with bilinear filtering. This one
      runs on every draw, including the repeat draws in vsync mode.
+- **Scanlines (F3):** the last step, the draw to the window, uses `crt-scanlines.frag`
+  instead (see the next section). Its input is an RGB picture with one or two rows per SNES
+  line: the NTSC texture (2 rows per line), or in sharp mode `sharpPictureTexture`. That's a
+  256-wide RGB copy of the frame made by `snes-pixels.frag` into `sharpFramebuffer`
+  (`flipY = 0`), only when scanlines are on, and once per uploaded frame
+  (`sharpPictureStale`). The window passes `scanlines = false` to `upload`, so the NTSC
+  shader's own Snes9x-style scanlines are off there. That option stays for the Java/GPU
+  parity tests and matches what Swing and `--screenshot --scanlines` draw.
 - **The NTSC table** (`SnesNtsc.table()`, 8192 rows × 128 columns of packed RGB) is built in
   Java and uploaded only when the mode changes (`ntscTableMode != mode`). It takes about
-  25 ms, so a mode switch costs one late frame. Changing scanlines doesn't rebuild it,
-  because scanlines are a uniform.
+  25 ms, so a mode switch costs one late frame. Changing scanlines doesn't rebuild it.
 - `fullscreen.vert` draws one oversized triangle from `gl_VertexID`, with no vertex data.
   Core profile still requires a bound VAO, hence `emptyVertexArray`. The fragment shaders
   work out positions from `gl_FragCoord` and a `viewport` uniform.
@@ -248,13 +262,46 @@ user's request (2026-11-15). Leaving either kind restores the saved window posit
   picture's top line, which is the *bottom* row in GL's convention. That's why the present
   shaders use `position.y = 1.0 - position.y`. `snes-ntsc.frag` treats `gl_FragCoord.y` as
   the top-down row number, so the FBO is stored top line at row 0 too. As a result,
-  `readNtscPicture()` (`glReadPixels` from row 0) returns rows top-down with no flip. Keep
-  this consistent when adding a pass (for example the CRT pass).
+  `readNtscPicture()` (`glReadPixels` from row 0) returns rows top-down with no flip. The
+  sharp RGB copy is stored the same way (`snes-pixels.frag` with `flipY = 0`; drawn to the
+  window it uses `flipY = 1`). Keep this consistent when adding a pass.
 - Letterboxing: `draw()` computes the largest rectangle with the picture's shape that fits
   the window, centers it, and clears the rest to black. Sharp mode keeps 8:7 (square
   pixels). NTSC keeps 602:448, which is close to 4:3.
 - `glGetUniformLocation` is called on every draw. This is cheap enough, and caching the
   locations would be an easy optimisation if ever needed.
+- `draw(framebuffer, width, height, margin, scanlines)` takes the target framebuffer: 0 for
+  the window, an offscreen one in tests.
+
+### The scanline shader (`crt-scanlines.frag`, 10e's first part)
+- **Model:** each SNES line is a horizontal beam with a Gaussian profile across it. Each
+  window pixel adds the light of the two nearest lines' beams at its distance from their
+  centers. The adding is done in linear light: decode with gamma 2.2, add, clamp, encode.
+  Lines outside the picture are black.
+- **Brightness-dependent width:** the beam's sigma goes from `DARK_WIDTH = 0.24` to
+  `BRIGHT_WIDTH = 0.40` line heights, following the square root of the linear brightness.
+  It's computed per color channel, so a saturated color's strong channel spreads wider (one
+  beam per electron gun). As a result, bright areas nearly close the gaps (two beams meet at
+  ~90% of their peak) while dark areas show clear lines (~27%).
+- **Fixed lines (240p):** the SNES normally sends 262-line fields with no half-line offset, so
+  every frame's lines land on the same rows of the tube. The gaps never move. The user asked
+  whether alternating even and odd rows would be more authentic. It would imitate 480i,
+  which the SNES only produces in its interlace mode ($2133 bit 0, rarely used, not
+  emulated). If that mode is ever emulated, shift the beams by half a line on alternate
+  fields for those games only.
+- **Horizontal:** NTSC pictures are sampled with linear filtering (smooth). Sharp pixels
+  snap to texel centers (`smoothX = 0`), so they stay crisp sideways. Vertically, each
+  sample sits at a row center, so lines never blend into each other.
+- **Tuning:** the constants are at the top of the shader. Checked by eye on Super Mario World
+  at 1440 px (6.4 px per line) and covered by `GlRendererTest`: a gray line's gap is
+  dimmer than its center, white nearly closes the gap, black stays black, a single line
+  lights only nearby rows, frames don't move the lines, and NTSC pictures get the same
+  structure. At non-integer scales (1440 / 224 = 6.43 px per line) the profile is evaluated
+  per pixel, so there are no hard moiré bands. Some lines do fall slightly differently on
+  the pixel grid.
+- **Still to do from the 10e plan:** shadow/slot/aperture mask, curvature, and maybe a
+  brightness boost to offset the darkening. Snes9x-style scanlines remain in Swing and
+  screenshots.
 
 ### The NTSC shader in detail (`snes-ntsc.frag`, LGPL)
 A GLSL port of the filtering step of `SnesNtsc.blit`. Its output is **identical to the Java
@@ -332,8 +379,9 @@ with scanlines on and off, over frames 1-3 (all burst phases).
   - Master brightness is applied before the filter, in 5-bit steps, as Snes9x's
     `mul_brightness` does. So a fade in an NTSC mode differs slightly from a fade in sharp
     mode.
-  - NTSC scanlines are Snes9x's simple "darken every second row". A real beam profile was
-    meant for the CRT pass (10e, deferred).
+  - The Java filter's scanlines (Swing, `--screenshot --scanlines`) are Snes9x's simple
+    "darken every second row". The OpenGL window draws beams instead (`crt-scanlines.frag`,
+    section 4).
 
 ## 7. Sound (`jfc.ui.audio`)
 
@@ -366,9 +414,9 @@ with scanlines on and off, over frames 1-3 (all burst phases).
 - The locked-vsync path on real hardware (the driver kept 144 Hz).
 
 **Known limits**
-- Borderless fullscreen (the default) gets G-Sync only with the driver's windowed G-Sync
-  setting. Exclusive fullscreen (`--fullscreen exclusive`) blanks for ~4 s per switch (the
-  display, not JFC).
+- Borderless fullscreen (F11) gets G-Sync only with the driver's windowed G-Sync setting,
+  and probably adds about one refresh of latency. Exclusive fullscreen (Alt+Enter) blanks for
+  ~4 s per switch (the display, not JFC).
 - Each refresh measurement pauses the game for ~0.4 s (at startup, exclusive-fullscreen
   switches, monitor change).
 - Swing: no vsync, and a key held while the window loses focus can stick.
@@ -400,9 +448,10 @@ in the OpenGL window. Package: the M10 layout lists it as `jfc.ui.debug`, while
 `status.md`'s older M9 plan says `jfc.debug`. Either keeps it out of `jfc.core`, so ask the
 user which one when M9 starts.
 
-**10e (CRT pass), deferred by the user:** it would be a third pass after the NTSC FBO (beam
-profile, mask, gamma, curvature), replacing Snes9x-style scanlines. Keep the top-down row
-convention described in section 4.
+**10e (CRT pass), partly done:** beam-profile scanlines replaced Snes9x-style scanlines in
+the OpenGL window (`crt-scanlines.frag`, section 4). Not done yet: mask, curvature, and any
+brightness compensation. They would go into the same shader or a pass after it. Keep the
+top-down row convention described in section 4.
 
 ## 9. Testing and checking this code
 
@@ -411,7 +460,7 @@ convention described in section 4.
   | Test | What it checks |
   |------|----------------|
   | `VideoFilterTest` | NTSC sizes, flat colors, artifacts, phases, scanlines, brightness |
-  | `GlRendererTest` | GPU vs Java, exact |
+  | `GlRendererTest` | GPU vs Java, exact; beam scanlines: gaps, bloom, black, fixed lines, NTSC |
   | `PacingDecisionTest` | 60/59.94/120/144 Hz, PAL, broken vsync, refused forced vsync |
   | `AudioResamplerTest` | the resampler |
   | `GlfwGamepadsTest` | standard layout, triggers, stick, hats; uses `GLFWGamepadState.create()`, so no pad or window needed |

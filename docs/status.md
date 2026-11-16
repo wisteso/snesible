@@ -19,7 +19,7 @@ play-test first). The frontend code is explained in `frontend.md`.
 | 8 | Coprocessors: SuperFX (Star Fox, Yoshi's Island) and SA-1 (Super Mario RPG) | see git log | done; the user played all three ("pretty much perfectly") |
 | - | Offset-per-tile in modes 2 and 4 (Star Fox horizon); GSU background ROM/RAM buffers | see git log | done |
 | 9 | Debug and state-viewer tools (plan below) | - | planned |
-| 10 | Move video and input to LWJGL; CRT/NTSC shaders (plan: `m10-shader-plan.md`) | branch `m10-video` | in progress: 10a (frontend boundary, 15-bit frame buffer), 10b (Java NTSC filter), 10c (package layout, OpenGL window, frame pacing), 10d (NTSC on the GPU) and 10f (GLFW gamepads) done; 10e (CRT pass) deferred by the user |
+| 10 | Move video and input to LWJGL; CRT/NTSC shaders (plan: `m10-shader-plan.md`) | branch `m10-video` | in progress: 10a (frontend boundary, 15-bit frame buffer), 10b (Java NTSC filter), 10c (package layout, OpenGL window, frame pacing), 10d (NTSC on the GPU) and 10f (GLFW gamepads) done; 10e (CRT pass) begun: beam-profile scanlines done, mask/curvature not |
 
 ## What the user has confirmed by playing
 
@@ -83,15 +83,20 @@ Each is documented where it lives in the code.
   from scripts: picks the steady clock at 143.9 Hz, frame gaps 16.0-17.5 ms windowed and
   16.3-17.0 ms fullscreen, audio buffer settling at ~50% with nothing dropped, F2/F11 work,
   GPU colors identical to `SnesColor` (`GlRendererTest`). The user has since played a few games with it ("everything seems fine").
-- Fullscreen (F11) is now a borderless window 1 px larger than the screen on each side,
-  which switches instantly (the user asked for this; exclusive stays as
-  `--fullscreen exclusive`). Exclusive fullscreen blanks the screen for ~4 s while the G-Sync
+- Fullscreen has two keys (the user's choice): F11 = borderless, a window 1 px larger than
+  the screen on each side, which switches instantly; Alt+Enter = exclusive, lowest latency.
+  The user confirmed both work ("instant and looks perfect"). Exclusive fullscreen blanks the screen for ~4 s while the G-Sync
   monitor re-syncs, and so does a borderless window that exactly covers the screen; one 1 px
   short leaves the taskbar in front. Details in `frontend.md`. The user confirmed borderless
   was "very quick" in a test program; checked in the game with screen captures (no taskbar,
   picture fills the visible screen, frame gaps at most ~30 ms around the switch).
 - The user has play-tested the OpenGL window (2026-11-15): "everything seems fine", on a few
   games.
+- Scanlines (F3) in the OpenGL window are now CRT beams with brightness-dependent width, in
+  every picture mode (10e's first part; the user asked for "improved scanlines"). They stay
+  fixed from frame to frame, as 240p does. The user asked about alternating even and odd
+  lines, which imitates 480i (interlace mode only). Checked with `GlRendererTest` and
+  renders of Super Mario World; the user hasn't seen them yet.
 - `--refresh 120` in fullscreen still measured 144 Hz: the NVIDIA driver apparently keeps the
   highest refresh rate ("Preferred refresh rate: Highest available"). So the locked-to-vsync
   path hasn't run on real hardware yet; `PacingDecisionTest` covers the decision, and the
