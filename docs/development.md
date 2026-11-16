@@ -65,7 +65,8 @@ J="$JAVA_HOME/bin/java"
 "$J" -cp target/classes jfc.Main --screenshot "roms/X.sfc" 700 out.png START@320 A@600
 "$J" -cp target/classes jfc.Main --screenshot "roms/X.sfc" 700 out.png --video composite  # NTSC filter
 "$J" -cp target/classes jfc.Main --record-audio "roms/X.sfc" 1800 out.wav START@1300
-"$J" -jar target/jfc-0.1.0-SNAPSHOT.jar --gamepad-test                  # needs the user to press buttons
+"$J" -jar target/jfc-0.1.0-SNAPSHOT.jar --gamepad-test                  # as the OpenGL window reads pads (GLFW); needs the user to press buttons
+"$J" -jar target/jfc-0.1.0-SNAPSHOT.jar --gamepad-test --swing          # as the Swing window reads them (winmm)
 "$J" -jar target/jfc-0.1.0-SNAPSHOT.jar "roms/X.sfc" --stats            # the OpenGL window, timing each second
 "$J" -jar target/jfc-0.1.0-SNAPSHOT.jar "roms/X.sfc" --swing            # the Swing window
 ```

@@ -39,8 +39,9 @@ public final class Main {
             play(Path.of(args[0]), Arrays.copyOfRange(args, 1, args.length));
             return;
         }
-        if (args.length == 1 && args[0].equals("--gamepad-test")) {
-            GamepadTest.run(GamepadMapping.load(GAMEPAD_MAPPING_FILE));
+        if (args.length >= 1 && args[0].equals("--gamepad-test")) {
+            boolean winmm = args.length == 2 && args[1].equals("--swing");
+            GamepadTest.run(GamepadMapping.load(GAMEPAD_MAPPING_FILE), winmm);
             return;
         }
         if (args.length >= 2 && args[0].equals("--info")) {
@@ -76,7 +77,9 @@ public final class Main {
                     --refresh <hz>                 refresh rate to ask for in exclusive
                                                    fullscreen (Alt+Enter)
                     --stats                        print timing and audio statistics each second
-                  jfc --gamepad-test             Show gamepad button numbers (for gamepad.properties)
+                  jfc --gamepad-test [--swing]   Show gamepad button numbers (for gamepad.properties),
+                                                 read as the OpenGL window does (GLFW) or, with
+                                                 --swing, as the Swing window does (winmm)
                   jfc --info <rom-file>...       Print the cartridge header of each ROM
                   jfc --run <rom-file> [frames] [BUTTON@frame ...]
                                                  Run without video and report what the CPU does

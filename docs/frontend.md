@@ -223,10 +223,9 @@ saved position and size. `toggleFullscreen(Fullscreen kind)` tracks the state in
 - **The user's Buffalo SNES pad (USB 0583:2060)** shows up in GLFW as
   "USB,2-axis 8-button gamepad": 8 buttons, 2 axes, no hats, not in the database. It takes
   the raw path with the default mapping (device buttons 0-7 = A, B, X, Y, L, R, Select,
-  Start), which the user confirmed under winmm. It was detected as controller 1, but **no
-  button presses have been tested through GLFW yet.** If GLFW numbers the buttons
-  differently from winmm, `gamepad.properties` fixes it. However, `--gamepad-test` still
-  reads winmm, so the numbers it shows may not match GLFW's.
+  Start). **The user confirmed the buttons are right in the OpenGL window** (2026-11-15), so
+  GLFW numbers them the same way winmm does. Its GLFW GUID is
+  `03000000830500006020000000000000`; the vendor and product ids appear in it byte-swapped.
 - **Players shift when a pad is unplugged.** Players are a list in plug-in order (at most
   2). If pad 1 is unplugged, pad 2 becomes controller 1. The winmm reader does the same. A
   third pad is reported and ignored.
@@ -353,7 +352,22 @@ with scanlines on and off, over frames 1-3 (all burst phases).
     rescan every 2 s froze the game every 2 s. A background thread didn't help, because of
     the same lock. The user decided on demand only, as Snes9x does, because many SNES games
     are latency-sensitive. Don't add automatic rescanning back.
-- `--gamepad-test` (`jfc.tools.GamepadTest`) uses winmm too.
+- `--gamepad-test --swing` reads pads through winmm, as this window does (see below).
+
+### `--gamepad-test` (`jfc.tools.GamepadTest`)
+- It lists the pads and prints every change of the first pad's raw state (button numbers,
+  axes, hat) next to the SNES buttons it maps to. Use it to write `gamepad.properties`.
+- **It reads pads the way the chosen window does**, because the two readers could number
+  buttons differently:
+  - By default it reads through GLFW, like the OpenGL window, via `jfc.ui.lwjgl.GlfwJoysticks`
+    (public: the tool sits outside `jfc.ui.lwjgl`, the only package allowed to use LWJGL).
+    For a pad in GLFW's database it says the pad is mapped by position and that
+    `gamepad.properties` doesn't apply, and it shows the positional SNES buttons.
+  - `--gamepad-test --swing` reads through winmm, like the Swing window.
+- `GlfwJoysticks` starts and stops GLFW itself, so it can't run while an `LwjglWindow` is
+  open. `GlfwGamepads` shares its `rawState`.
+- Run it with `java -jar`. With `-cp target/classes` there's no LWJGL; it says so and
+  suggests `--swing`.
 
 ## 6. Video conversion (`jfc.ui.video`) and the NTSC port (`jfc.ui.video.ntsc`)
 
@@ -410,7 +424,6 @@ with scanlines on and off, over frames 1-3 (all burst phases).
 ## 8. Known limits, open items and future work
 
 **Not yet verified by the user** (they played a few games with it on 2026-11-15, "everything seems fine", but these weren't checked specifically):
-- Buffalo pad button presses through GLFW (see section 4).
 - Whether G-Sync works in windowed mode. That needs NVIDIA's "Enable G-SYNC for windowed and
   full screen mode". Fullscreen is the reliable case.
 - The locked-vsync path on real hardware (the driver kept 144 Hz).
@@ -422,7 +435,6 @@ with scanlines on and off, over frames 1-3 (all burst phases).
 - Each refresh measurement pauses the game for ~0.4 s (at startup, exclusive-fullscreen
   switches, monitor change).
 - Swing: no vsync, and a key held while the window loses focus can stick.
-- `--gamepad-test` reads winmm, not GLFW.
 - Only 2 players. Players shift down when pad 1 is unplugged.
 - Only the build machine's LWJGL natives are bundled. A Maven profile picks Windows, Linux,
   macOS x64 or macOS arm64 at build time, so a jar built on Windows runs the OpenGL window
@@ -449,6 +461,17 @@ snapshots between frames on the thread that runs `runFrame()`, which is the **ma
 in the OpenGL window. Package: the M10 layout lists it as `jfc.ui.debug`, while
 `status.md`'s older M9 plan says `jfc.debug`. Either keeps it out of `jfc.core`, so ask the
 user which one when M9 starts.
+
+**Optional future features** (the user's list, 2026-11-15; none is planned work):
+- A CRT shadow/slot/aperture mask. It's marginal at 1440p, where a TV's ~650 slot columns
+  give only 3-4 screen pixels per RGB triad, and it costs brightness.
+- 4:3 pixels in sharp mode. A TV stretched the 256-pixel lines to 4:3 (an 8:7 pixel aspect),
+  but sharp mode shows square pixels. The NTSC modes are already about 4:3 (602 x 448).
+- Adjustable NTSC settings (Blargg's hue, saturation, sharpness, artifacts, fringing, bleed
+  ...); only the fixed presets exist now.
+
+Declined by the user: screen curvature. Done and confirmed: beam scanlines (no tuning
+wanted), both fullscreen keys, and the Buffalo pad through GLFW.
 
 **10e (CRT pass), partly done:** beam-profile scanlines replaced Snes9x-style scanlines in
 the OpenGL window (`crt-scanlines.frag`, section 4). Not done yet: a mask and any
@@ -505,7 +528,8 @@ top-down row convention described in section 4.
 - **`FramePacer`:** never created. Pacing lives in `LwjglWindow` and `PacingDecision`.
 - **"Swing paced by audio":** no longer true. Both windows use `FrameClock` or vsync, with
   dynamic rate control for sound.
-- **`--gamepad-test` moving to GLFW:** this didn't happen. It still reads winmm.
+- **`--gamepad-test` moving to GLFW:** it reads both ways instead: GLFW by default, winmm
+  with `--swing`.
 - **Shader location:** `src/main/resources/jfc/ui/lwjgl/shaders/`, not
   `src/main/resources/shaders/`.
 - **CPU NTSC in the OpenGL window:** the plan offered it. The user saw no use for it, so
