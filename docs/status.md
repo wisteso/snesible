@@ -1,7 +1,7 @@
 # Project status
 
-Last updated: 2026-11-15, Milestone 10 on branch `m10-video` (not merged yet: the user wants to
-play-test first). The frontend code is explained in `frontend.md`.
+Last updated: 2026-11-15, Milestone 10, merged into `main` after the user's play-tests. The
+frontend code is explained in `frontend.md`.
 
 ## Milestones
 
@@ -19,7 +19,7 @@ play-test first). The frontend code is explained in `frontend.md`.
 | 8 | Coprocessors: SuperFX (Star Fox, Yoshi's Island) and SA-1 (Super Mario RPG) | see git log | done; the user played all three ("pretty much perfectly") |
 | - | Offset-per-tile in modes 2 and 4 (Star Fox horizon); GSU background ROM/RAM buffers | see git log | done |
 | 9 | Debug and state-viewer tools (plan below) | - | planned |
-| 10 | Move video and input to LWJGL; CRT/NTSC shaders (plan: `m10-shader-plan.md`) | branch `m10-video` | in progress: 10a (frontend boundary, 15-bit frame buffer), 10b (Java NTSC filter), 10c (package layout, OpenGL window, frame pacing), 10d (NTSC on the GPU) and 10f (GLFW gamepads) done; 10e (CRT pass) begun: beam-profile scanlines done (the user likes them), mask optional, curvature declined by the user |
+| 10 | Move video and input to LWJGL; CRT/NTSC shaders (plan: `m10-shader-plan.md`) | see git log | done, merged 2026-11-15: 10a (frontend boundary, 15-bit frame buffer), 10b (Java NTSC filter), 10c (package layout, OpenGL window, frame pacing), 10d (NTSC on the GPU), 10f (GLFW gamepads), and from 10e the beam-profile scanlines (the user likes them). Optional extras (shadow mask, 4:3 sharp pixels, NTSC settings) are listed in `frontend.md`; curvature was declined |
 
 ## What the user has confirmed by playing
 
