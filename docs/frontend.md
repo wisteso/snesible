@@ -7,8 +7,8 @@ decisions; where it and the code disagree, the code (and this file) win. See "Wh
 and the code differ" at the end.
 
 Branch history: all of this was built on `m10-video` (worktree `.claude/worktrees/m10-video`),
-branched from `main` at `850cca2`. As of 2026-11-15 `main` had no commits after that point,
-so the merge would be a fast-forward. The user wants to play-test before merging.
+branched from `main` at `850cca2`, and merged into `main` as a fast-forward on 2026-11-15
+after the user's play-tests.
 
 ## 1. What changed for someone coming from `main`
 
