@@ -16,9 +16,10 @@ import java.util.Arrays;
  *   <li><b>Color math:</b> each main screen pixel may be added to or subtracted from the sub
  *       screen pixel (or a fixed color), optionally halved. This gives transparency, shadows,
  *       fades and colored gradients.</li>
- *   <li><b>Brightness:</b> the master brightness is stored next to the final color. Each
- *       frame-buffer pixel is {@code brightness << 15 | bgr15}; the display side
- *       ({@code jfc.ui.video.SnesColor}) turns that into RGB.</li>
+ *   <li><b>Brightness:</b> the master brightness is stored next to the final color rather than
+ *       applied to it. Each frame-buffer pixel is {@code brightness << 15 | bgr15}; the display
+ *       side ({@code jfc.ui.video.SnesColor}) turns that into RGB. See
+ *       {@link #withBrightness} for why.</li>
  * </ol>
  *
  * <h2>Background modes</h2>
@@ -39,7 +40,16 @@ import java.util.Arrays;
  */
 final class Renderer {
 
-    /** Where the master brightness sits in a frame-buffer pixel (above the 15-bit color). */
+    /**
+     * Where the master brightness sits in a frame-buffer pixel: bits 15-18, just above the 15-bit
+     * color (see {@link #withBrightness}).
+     *
+     * <p>The display side relies on this layout but can't use this constant, which is
+     * package-private (and the core can't refer to the display side either). So the layout is
+     * repeated in {@code jfc.ui.video.SnesColor.BRIGHTNESS_SHIFT} and as the literal {@code 15}
+     * in the OpenGL shaders {@code snes-pixels.frag} and {@code snes-ntsc.frag}. Change them
+     * together.
+     */
     static final int BRIGHTNESS_SHIFT = 15;
 
     /** Enough lines for overscan mode. */
@@ -113,6 +123,8 @@ final class Renderer {
     void renderLine(int y) {
         int rowStart = y * WIDTH;
         if (ppu.forcedBlank) {
+            // Forced blank (INIDISP bit 7): the PPU outputs black and draws nothing. A packed 0
+            // is color 0 at brightness 0, which every display turns into black.
             Arrays.fill(frameBuffer, rowStart, rowStart + WIDTH, 0);
             return;
         }
@@ -123,9 +135,8 @@ final class Renderer {
         resolveScreen(order, ppu.mainScreenLayers, ppu.mainScreenWindowedLayers, mainSource, mainColor);
         resolveScreen(order, ppu.subScreenLayers, ppu.subScreenWindowedLayers, subSource, subColor);
 
-        int brightnessBits = ppu.brightness << BRIGHTNESS_SHIFT;
         for (int x = 0; x < WIDTH; x++) {
-            frameBuffer[rowStart + x] = brightnessBits | applyColorMath(x);
+            frameBuffer[rowStart + x] = withBrightness(applyColorMath(x)); // steps 4 and 5
         }
     }
 
@@ -328,9 +339,31 @@ final class Renderer {
     // =============================================================================================
     // Step 5: brightness
     // =============================================================================================
-    //
-    // The PPU's work ends with a 15-bit color and the master brightness that applies to it. On
-    // the console, the video circuitry turns those into analog voltages; here, turning them into
-    // a PC's RGB (or into a simulated NTSC signal) is the display's job (jfc.ui.video.SnesColor).
-    // So the frame buffer stores both, packed as  brightness << 15 | bgr15.
+
+    /**
+     * Attaches the master brightness to a finished pixel, giving the value the frame buffer
+     * stores:
+     * <pre>
+     *   bits 31-19  always 0
+     *   bits 18-15  master brightness, 0 (black) to 15 (full), from INIDISP ($2100) bits 0-3
+     *   bits 14-10  blue  (0-31)
+     *   bits  9-5   green (0-31)
+     *   bits  4-0   red   (0-31)    (the color bits have CGRAM's layout, 0bbbbbgggggrrrrr)
+     * </pre>
+     *
+     * <p><b>Why the brightness isn't applied here.</b> On the console the PPU's work also ends
+     * with a 15-bit color and a brightness level: the video circuitry after it scales the
+     * color's voltages by the brightness while making the analog signal. So this is where the
+     * emulated hardware stops, and how to show the result is the display's choice: plain RGB
+     * ({@code jfc.ui.video.SnesColor}), or a simulated NTSC signal, which needs the exact SNES
+     * color, also during fades. Multiplying here and rounding to 8 bits would lose it: at
+     * brightness 7, say, several 5-bit levels map to the same 8-bit value.
+     *
+     * <p><b>Per line, as on hardware.</b> {@code ppu.brightness} is read as each line is drawn,
+     * so a game changing INIDISP between lines (by HDMA, for a gradient or a fade wiping down
+     * the screen) gets a different brightness on each line, and each pixel carries its own.
+     */
+    private int withBrightness(int bgr15) {
+        return (ppu.brightness << BRIGHTNESS_SHIFT) | bgr15;
+    }
 }
