@@ -493,7 +493,7 @@ top-down row convention described in section 4.
   | `CoreBoundaryTest` | `jfc.core` imports |
 
   Surefire runs with `--enable-native-access=ALL-UNNAMED` (pom `argLine`). The whole suite
-  is about 923 tests and takes about 10 s.
+  is about 927 tests and takes about 10 s.
 - **Headless:**
 
   ```

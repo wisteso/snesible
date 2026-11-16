@@ -123,9 +123,9 @@ mvn test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
 7. ~~Real APU: SPC700 and DSP audio~~
 8. Debug and state-viewer tools
 
-Milestone 10 (mostly done): an NTSC TV filter (in Java for Swing and screenshots, as a shader
+Milestone 10 (done): an NTSC TV filter (in Java for Swing and screenshots, as a shader
 in the OpenGL window), an OpenGL window with display-synchronized pacing, and cross-platform
-gamepads through GLFW, and CRT-style scanlines. A shadow mask may follow.
+gamepads through GLFW, and CRT-style scanlines. A shadow mask may follow someday.
 
 ## Licensing note
 

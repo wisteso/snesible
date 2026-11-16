@@ -54,7 +54,7 @@ failure details.
 | `VideoFilterTest` | sharp-pixel conversion; NTSC filter: size, flat colors, composite vs S-Video artifacts, burst phase per line and frame, scanlines, brightness |
 | `ArithmeticUnitTest`, `JoypadPortsTest`, `GamepadMappingTest` | small units |
 
-The total is about 923 tests, taking about 10 s.
+The total is about 927 tests, taking about 10 s.
 
 ## Headless tools (essential for checking work without seeing or hearing it)
 
