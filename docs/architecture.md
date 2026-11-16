@@ -150,8 +150,9 @@ temp-file move).
   multiple of 60.10 Hz, else a **steady clock** (`FrameClock`) at the console's rate with each
   frame shown as soon as it's drawn, which a G-Sync/FreeSync display turns into exact,
   smooth 60.10 Hz. It re-measures on an exclusive-fullscreen switch and when the window moves to another
-  monitor. F11 defaults to a borderless window slightly larger than the screen, which
-  switches instantly (`frontend.md` explains why).
+  monitor. F11 is a borderless window slightly larger than the screen, which switches
+  instantly; Alt+Enter is exclusive fullscreen, with the lowest latency (`frontend.md`
+  explains why there are two).
 - **Swing window**: an "emulation" thread (non-daemon, so it can write the final save) runs
   frames paced by a `FrameClock`. Swing's event thread paints the image and passes keys to
   `SwingKeyboard` (an `AtomicInteger` the emulation thread reads).
@@ -179,7 +180,9 @@ summing six precomputed smears with the same packed integer maths as `SnesNtsc.b
 `rgb-picture.frag` scales it to the window bilinearly. The table of smears is still built by
 `SnesNtsc` in Java when the mode changes (~25 ms) and uploaded as a 128 x 8192 `GL_R32UI`
 texture. `GlRendererTest` checks the GPU output equals the Java filter's for every pixel
-(three setups, all burst phases, scanlines on and off). Shaders live in
+(three setups, all burst phases, scanlines on and off). Scanlines (F3) are drawn as CRT
+beams when the picture is scaled to the window (`crt-scanlines.frag`, in any picture mode).
+Shaders live in
 `src/main/resources/jfc/ui/lwjgl/shaders/`. LWJGL is told to use its FFM memory backend
 (`Configuration.MEMORY_BACKEND = "ffm"`), which avoids the JVM's `sun.misc.Unsafe` warnings.
 
@@ -202,5 +205,5 @@ So `InterruptControl` is created first and then `interrupts.connect(cpu)` once t
 
 ## Planned direction
 
-Milestone 10's remaining step (see `docs/m10-shader-plan.md`) is 10e, a CRT pass (beam
-profile, mask, gamma, curvature), which would follow the NTSC pass as a third shader. The core (`jfc.core`) must not depend on Swing or LWJGL (`CoreBoundaryTest`).
+Milestone 10's remaining step (see `docs/m10-shader-plan.md`) is the rest of 10e: the beam
+scanlines are done, while a mask and curvature are not. The core (`jfc.core`) must not depend on Swing or LWJGL (`CoreBoundaryTest`).

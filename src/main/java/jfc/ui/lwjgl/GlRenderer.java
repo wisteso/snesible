@@ -31,6 +31,15 @@ import jfc.ui.video.ntsc.SnesNtsc;
  * <p>The picture is drawn into a <i>viewport</i>: the largest rectangle with the picture's
  * shape that fits the window, centered, with black bars around it.
  *
+ * <p><b>Scanlines</b> (F3) are drawn at that last step, at the window's resolution, by
+ * {@code crt-scanlines.frag}: each SNES line becomes a beam of light whose width depends on its
+ * brightness, as on a CRT. That shader reads an RGB picture with one or two rows per line: the
+ * NTSC pass's output, or for sharp pixels a 256-pixel-wide RGB copy of the frame made by
+ * {@code snes-pixels.frag} into a second offscreen texture.
+ *
+ * <p>Offscreen textures are stored top line first (row 0 is the top of the picture). In
+ * OpenGL's own convention row 0 is the bottom, so the shaders that draw to the window flip y.
+ *
  * <p>All methods must be called on the thread that owns the OpenGL context (the main thread).
  */
 final class GlRenderer {
@@ -43,18 +52,26 @@ final class GlRenderer {
     private final int sharpProgram;
     private final int ntscProgram;
     private final int presentProgram;
+    private final int scanlineProgram;
     /** OpenGL 3.3 core needs a vertex array object bound to draw, even with no vertex data. */
     private final int emptyVertexArray;
     private final int rawTexture;
     private final int ntscTableTexture;
     private final int ntscPictureTexture;
     private final int ntscFramebuffer;
+    /** Sharp pixels as RGB, one row per line: the scanline shader's input in sharp mode. */
+    private final int sharpPictureTexture;
+    private final int sharpFramebuffer;
 
     // Texture sizes as allocated; reallocated when a picture of another size arrives.
     private int rawWidth;
     private int rawHeight;
     private int ntscWidth;
     private int ntscHeight;
+    private int sharpWidth;
+    private int sharpHeight;
+    /** The sharp RGB texture doesn't hold the latest frame yet (it's made only when needed). */
+    private boolean sharpPictureStale = true;
 
     /** The mode whose NTSC table is in the table texture, or null. */
     private VideoMode ntscTableMode;
@@ -63,12 +80,15 @@ final class GlRenderer {
     private boolean showingNtsc;
     private int pictureWidth = 256;
     private int pictureHeight = 224;
+    /** SNES lines in the current picture (224 or 239). */
+    private int pictureLines = 224;
 
     GlRenderer() {
         int vertex = compile(GL_VERTEX_SHADER, "fullscreen.vert");
         sharpProgram = link(vertex, compile(GL_FRAGMENT_SHADER, "snes-pixels.frag"));
         ntscProgram = link(vertex, compile(GL_FRAGMENT_SHADER, "snes-ntsc.frag"));
         presentProgram = link(vertex, compile(GL_FRAGMENT_SHADER, "rgb-picture.frag"));
+        scanlineProgram = link(vertex, compile(GL_FRAGMENT_SHADER, "crt-scanlines.frag"));
         glDeleteShader(vertex);
         emptyVertexArray = glGenVertexArrays();
 
@@ -76,15 +96,21 @@ final class GlRenderer {
         ntscTableTexture = createTexture(GL_NEAREST);
         ntscPictureTexture = createTexture(GL_LINEAR); // scaled smoothly to the window
         ntscFramebuffer = glGenFramebuffers();
+        sharpPictureTexture = createTexture(GL_LINEAR);
+        sharpFramebuffer = glGenFramebuffers();
     }
 
     /**
      * Takes a new frame: uploads its raw pixels and, in an NTSC mode, runs the NTSC pass. The
      * frame's array is only read during this call.
      *
-     * @param scanlines with an NTSC mode, darken every second output row (Snes9x's option)
+     * @param scanlines with an NTSC mode, darken every second output row (Snes9x's option, as
+     *                  in the Java filter). The window uses the beam scanlines of
+     *                  {@link #draw} instead; tests use this to compare with the Java filter.
      */
     void upload(Frame frame, VideoMode mode, boolean scanlines) {
+        pictureLines = frame.height();
+        sharpPictureStale = true;
         glBindTexture(GL_TEXTURE_2D, rawTexture);
         if (rawWidth != frame.width() || rawHeight != frame.height()) {
             rawWidth = frame.width();
@@ -153,15 +179,50 @@ final class GlRenderer {
     }
 
     /**
-     * Draws the current picture into a window whose drawable area is
-     * {@code windowWidth x windowHeight} pixels.
-     *
-     * @param margin pixels to leave black on every side, outside the picture. The borderless
-     *               fullscreen window reaches past the screen's edges, and this keeps the
-     *               picture on the visible part.
+     * Converts the uploaded frame to RGB, one row per line, in {@code sharpPictureTexture}, for
+     * the scanline shader. Same colors as sharp pixels drawn directly.
      */
-    void draw(int windowWidth, int windowHeight, int margin) {
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    private void renderSharpPicture() {
+        if (sharpWidth != rawWidth || sharpHeight != rawHeight) {
+            sharpWidth = rawWidth;
+            sharpHeight = rawHeight;
+            glBindTexture(GL_TEXTURE_2D, sharpPictureTexture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sharpWidth, sharpHeight, 0,
+                    GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
+            glBindFramebuffer(GL_FRAMEBUFFER, sharpFramebuffer);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, sharpPictureTexture, 0);
+            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                throw new IllegalStateException("couldn't set up the sharp-picture framebuffer");
+            }
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, sharpFramebuffer);
+        glViewport(0, 0, sharpWidth, sharpHeight);
+        glUseProgram(sharpProgram);
+        glUniform1i(glGetUniformLocation(sharpProgram, "picture"), 0);
+        glUniform4f(glGetUniformLocation(sharpProgram, "viewport"), 0, 0, sharpWidth, sharpHeight);
+        glUniform2i(glGetUniformLocation(sharpProgram, "pictureSize"), sharpWidth, sharpHeight);
+        glUniform1i(glGetUniformLocation(sharpProgram, "flipY"), 0); // top line first, like the NTSC picture
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, rawTexture);
+        glBindVertexArray(emptyVertexArray);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        sharpPictureStale = false;
+    }
+
+    /**
+     * Draws the current picture into a framebuffer of {@code windowWidth x windowHeight}
+     * pixels: the window's (0) or, in tests, an offscreen one.
+     *
+     * @param margin    pixels to leave black on every side, outside the picture. The borderless
+     *                  fullscreen window reaches past the screen's edges, and this keeps the
+     *                  picture on the visible part.
+     * @param scanlines draw each line as a CRT beam ({@code crt-scanlines.frag})
+     */
+    void draw(int framebuffer, int windowWidth, int windowHeight, int margin, boolean scanlines) {
+        if (scanlines && !showingNtsc && sharpPictureStale) {
+            renderSharpPicture();
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
         glViewport(0, 0, windowWidth, windowHeight);
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -179,15 +240,32 @@ final class GlRenderer {
         int y = (windowHeight - height) / 2;
         glViewport(x, y, width, height);
 
-        int program = showingNtsc ? presentProgram : sharpProgram;
-        glUseProgram(program);
+        int program;
+        int texture;
+        if (scanlines) {
+            program = scanlineProgram;
+            texture = showingNtsc ? ntscPictureTexture : sharpPictureTexture;
+            glUseProgram(program);
+            glUniform1i(glGetUniformLocation(program, "lineCount"), pictureLines);
+            // The NTSC picture draws every line twice; the sharp copy once.
+            glUniform1i(glGetUniformLocation(program, "rowsPerLine"), showingNtsc ? 2 : 1);
+            // NTSC pixels blend smoothly sideways; sharp pixels stay crisp.
+            glUniform1i(glGetUniformLocation(program, "smoothX"), showingNtsc ? 1 : 0);
+        } else if (showingNtsc) {
+            program = presentProgram;
+            texture = ntscPictureTexture;
+            glUseProgram(program);
+        } else {
+            program = sharpProgram;
+            texture = rawTexture;
+            glUseProgram(program);
+            glUniform2i(glGetUniformLocation(program, "pictureSize"), pictureWidth, pictureHeight);
+            glUniform1i(glGetUniformLocation(program, "flipY"), 1);
+        }
         glUniform1i(glGetUniformLocation(program, "picture"), 0);
         glUniform4f(glGetUniformLocation(program, "viewport"), x, y, width, height);
-        if (!showingNtsc) {
-            glUniform2i(glGetUniformLocation(program, "pictureSize"), pictureWidth, pictureHeight);
-        }
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, showingNtsc ? ntscPictureTexture : rawTexture);
+        glBindTexture(GL_TEXTURE_2D, texture);
         glBindVertexArray(emptyVertexArray);
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }
@@ -212,11 +290,14 @@ final class GlRenderer {
         glDeleteProgram(sharpProgram);
         glDeleteProgram(ntscProgram);
         glDeleteProgram(presentProgram);
+        glDeleteProgram(scanlineProgram);
         glDeleteVertexArrays(emptyVertexArray);
         glDeleteFramebuffers(ntscFramebuffer);
+        glDeleteFramebuffers(sharpFramebuffer);
         glDeleteTextures(rawTexture);
         glDeleteTextures(ntscTableTexture);
         glDeleteTextures(ntscPictureTexture);
+        glDeleteTextures(sharpPictureTexture);
     }
 
     private static int createTexture(int filter) {

@@ -46,7 +46,7 @@ failure details.
 | `SnesTest` | memory map, access timing, frame length, NMI, V-IRQ, DMA, HDMA incl. mid-frame enable (hand-assembled programs) |
 | `PpuPortsTest`, `RendererTest`, `EffectsTest` | VRAM/CGRAM/OAM ports, layers, sprites, priorities, color math, windows, Mode 7, mosaic, offset-per-tile |
 | `ApuTest`, `DspTest` | boot ROM upload protocol, timers, voice playback, ENDX, key off |
-| `GlRendererTest` | the OpenGL path in a hidden window: sharp pixels match `SnesColor` and the NTSC shader matches the Java filter, for every pixel (skipped without OpenGL 3.3) |
+| `GlRendererTest` | the OpenGL path in a hidden window: sharp pixels match `SnesColor` and the NTSC shader matches the Java filter, for every pixel; beam scanlines behave (skipped without OpenGL 3.3) |
 | `GlfwGamepadsTest` | standard-layout gamepads map by position; triggers, stick, hat angles |
 | `PacingDecisionTest` | which pacing the OpenGL window picks for 60, 59.94, 120, 144 Hz, PAL, broken vsync |
 | `AudioResamplerTest` | dynamic rate control: exact at ratio 1, the right length at 1.005, no clicks between chunks |

@@ -13,19 +13,20 @@ java -jar target/jfc-0.1.0-SNAPSHOT.jar "roms/Super Mario World.sfc"
 ```
 
 Keys: arrows = D-pad, X = A, Z = B, S = X, A = Y, Q = L, W = R, Enter = Start,
-Shift/Backspace = Select, Escape = quit, F11 = fullscreen. F2 cycles the picture mode (sharp pixels, or an NTSC
-TV filter for a composite, S-Video, RGB, black-and-white or RF connection) and F3 toggles NTSC
-scanlines. `--video composite` (or `svideo`, `rgb`, `monochrome`, `rf`) and `--scanlines` pick
+Shift/Backspace = Select, Escape = quit. F11 = fullscreen (instant), Alt+Enter = exclusive
+fullscreen (lowest latency; the screen blanks for a few seconds while the monitor adjusts).
+F2 cycles the picture mode (sharp pixels, or an NTSC TV filter for a composite, S-Video, RGB,
+black-and-white or RF connection) and F3 toggles scanlines (drawn like a CRT's beams in the
+OpenGL window). `--video composite` (or `svideo`, `rgb`, `monochrome`, `rf`) and `--scanlines` pick
 them at startup.
 
 The window uses OpenGL (through LWJGL) and paces itself to the display: locked to vsync on a
 60 or 120 Hz display, or a steady 60.10 Hz clock otherwise, which G-Sync/FreeSync displays show
 perfectly smoothly. `--swing` uses the simpler Swing window instead (also the automatic
 fallback without OpenGL 3.3); `--pacing vsync|clock` overrides the choice, and `--stats` prints timing each second.
-F11 uses a borderless window that switches instantly; `--fullscreen exclusive` uses exclusive
-fullscreen instead (the monitor re-syncs for a few seconds on each switch, but G-Sync/FreeSync
-then works without the driver's windowed-mode setting), and `--refresh <hz>` asks for a
-refresh rate there.
+In borderless fullscreen (F11), G-Sync/FreeSync works only if the graphics driver allows it
+for windows; exclusive fullscreen (Alt+Enter) doesn't need that, and `--refresh <hz>` asks
+for a refresh rate there.
 
 Gamepads: the first pad plays as controller 1 alongside the keyboard, a second as controller
 2. In the OpenGL window they work on any platform and can be plugged in or out at any time;
@@ -124,7 +125,7 @@ mvn test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
 
 Milestone 10 (mostly done): an NTSC TV filter (in Java for Swing and screenshots, as a shader
 in the OpenGL window), an OpenGL window with display-synchronized pacing, and cross-platform
-gamepads through GLFW. A CRT shader is next.
+gamepads through GLFW, and CRT-style scanlines. A shadow mask and curvature may follow.
 
 ## Licensing note
 

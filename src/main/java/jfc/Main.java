@@ -70,14 +70,11 @@ public final class Main {
                   jfc <rom-file> [options]       Play a game in a window. Options:
                     --video <mode>                 sharp (default), composite, svideo, rgb,
                                                    monochrome, rf (NTSC TV filters)
-                    --scanlines                    NTSC scanlines
+                    --scanlines                    start with scanlines on (F3)
                     --swing                        the Swing window instead of OpenGL
                     --pacing auto|vsync|clock      frame pacing (OpenGL window; default auto)
-                    --fullscreen borderless|exclusive
-                                                   what F11 does (OpenGL window; default borderless:
-                                                   instant; exclusive: the monitor re-syncs, but
-                                                   G-Sync/FreeSync needs no driver setting)
-                    --refresh <hz>                 refresh rate to ask for in exclusive fullscreen
+                    --refresh <hz>                 refresh rate to ask for in exclusive
+                                                   fullscreen (Alt+Enter)
                     --stats                        print timing and audio statistics each second
                   jfc --gamepad-test             Show gamepad button numbers (for gamepad.properties)
                   jfc --info <rom-file>...       Print the cartridge header of each ROM
@@ -101,7 +98,6 @@ public final class Main {
         boolean scanlines = false;
         boolean swing = false;
         PacingMode pacing = PacingMode.AUTO;
-        boolean exclusiveFullscreen = false;
         int fullscreenRefresh = 0;
         boolean stats = false;
         for (int i = 0; i < options.length; i++) {
@@ -110,18 +106,12 @@ public final class Main {
                 case "--scanlines" -> scanlines = true;
                 case "--swing" -> swing = true;
                 case "--pacing" -> pacing = PacingMode.parse(options[++i]);
-                case "--fullscreen" -> exclusiveFullscreen = switch (options[++i]) {
-                    case "exclusive" -> true;
-                    case "borderless" -> false;
-                    default -> throw new IllegalArgumentException("--fullscreen takes borderless or exclusive");
-                };
                 case "--refresh" -> fullscreenRefresh = Integer.parseInt(options[++i]);
                 case "--stats" -> stats = true;
                 default -> throw new IllegalArgumentException("Unknown option: " + options[i]);
             }
         }
-        PlayOptions playOptions = new PlayOptions(videoMode, scanlines, pacing, exclusiveFullscreen,
-                fullscreenRefresh, stats);
+        PlayOptions playOptions = new PlayOptions(videoMode, scanlines, pacing, fullscreenRefresh, stats);
 
         Cartridge cart = Cartridge.load(romFile);
         String title = cart.header().title();

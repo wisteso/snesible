@@ -51,11 +51,12 @@ import org.lwjgl.system.Configuration;
  * GLFW reports refresh rates as whole numbers (a 59.94 Hz display says 59), so the window
  * <i>measures</i> the real refresh interval by timing a few swaps. That also catches vsync
  * being switched off in the driver's settings, in which case the steady clock takes over. The
- * measurement is repeated when the window moves to another monitor or goes fullscreen.
+ * measurement is repeated when the window moves to another monitor or enters or leaves
+ * exclusive fullscreen.
  *
  * <p>Keys: the controller keys (see {@link GlfwKeyboard}), F2 = next picture mode,
- * F3 = NTSC scanlines, F11 = fullscreen, Escape = quit. Gamepads come and go by themselves
- * ({@link GlfwGamepads}).
+ * F3 = scanlines, F11 = borderless fullscreen, Alt+Enter = exclusive fullscreen,
+ * Escape = quit. Gamepads come and go by themselves ({@link GlfwGamepads}).
  */
 public final class LwjglWindow implements VideoSink {
 
@@ -98,8 +99,10 @@ public final class LwjglWindow implements VideoSink {
     private int recheckCount;
     private long monitorAtLastCheck = NULL;
 
-    /** In fullscreen (borderless or exclusive). */
-    private boolean fullscreen;
+    /** How the window is shown: in a window, or one of the two kinds of fullscreen. */
+    private enum Fullscreen { OFF, BORDERLESS, EXCLUSIVE }
+
+    private Fullscreen fullscreen = Fullscreen.OFF;
     // The windowed position and size, restored when leaving fullscreen.
     private final int[] windowedX = new int[1];
     private final int[] windowedY = new int[1];
@@ -195,7 +198,7 @@ public final class LwjglWindow implements VideoSink {
         glfwSwapInterval(1); // vsync: each swap waits for the display's next refresh
         renderer = new GlRenderer();
 
-        glfwSetKeyCallback(window, (win, key, scancode, action, mods) -> handleKey(key, action));
+        glfwSetKeyCallback(window, (win, key, scancode, action, mods) -> handleKey(key, action, mods));
         glfwSetWindowFocusCallback(window, (win, focused) -> {
             if (!focused) {
                 keyboard.releaseAll(); // releases while unfocused would never arrive
@@ -253,8 +256,8 @@ public final class LwjglWindow implements VideoSink {
         glfwGetFramebufferSize(window, width, height);
         // Borderless fullscreen reaches one pixel past each edge of the screen; keep the
         // picture inside what's visible.
-        int margin = fullscreen && !options.exclusiveFullscreen() ? BORDERLESS_OVERHANG : 0;
-        renderer.draw(width[0], height[0], margin);
+        int margin = fullscreen == Fullscreen.BORDERLESS ? BORDERLESS_OVERHANG : 0;
+        renderer.draw(0, width[0], height[0], margin, scanlines);
         glfwSwapBuffers(window);
     }
 
@@ -323,7 +326,9 @@ public final class LwjglWindow implements VideoSink {
     /** Uploads the frame (and, in an NTSC mode, runs the NTSC shader). Called on the main thread. */
     @Override
     public void present(Frame frame) {
-        renderer.upload(frame, mode, scanlines);
+        // Scanlines are drawn as beams when the picture is scaled to the window (GlRenderer.draw),
+        // not with the NTSC filter's own darken-every-second-row option.
+        renderer.upload(frame, mode, false);
     }
 
     @Override
@@ -336,7 +341,13 @@ public final class LwjglWindow implements VideoSink {
     // Keys, fullscreen, monitors
     // =============================================================================================
 
-    private void handleKey(int key, int action) {
+    private void handleKey(int key, int action, int mods) {
+        if (action == GLFW_PRESS && key == GLFW_KEY_ENTER && (mods & GLFW_MOD_ALT) != 0) {
+            // Alt+Enter, not Start: Enter is a controller key, so check this before passing
+            // keys on. (Enter's release still reaches the keyboard, which is harmless.)
+            toggleFullscreen(Fullscreen.EXCLUSIVE);
+            return;
+        }
         if (action == GLFW_PRESS) {
             switch (key) {
                 case GLFW_KEY_ESCAPE -> {
@@ -350,7 +361,7 @@ public final class LwjglWindow implements VideoSink {
                 }
                 case GLFW_KEY_F3 -> {
                     scanlines = !scanlines;
-                    System.out.println("NTSC scanlines " + (scanlines ? "on" : "off"));
+                    System.out.println("Scanlines " + (scanlines ? "on" : "off"));
                     return;
                 }
                 case GLFW_KEY_F9 -> {
@@ -358,7 +369,7 @@ public final class LwjglWindow implements VideoSink {
                     return;
                 }
                 case GLFW_KEY_F11 -> {
-                    toggleFullscreen();
+                    toggleFullscreen(Fullscreen.BORDERLESS);
                     return;
                 }
                 default -> {
@@ -369,10 +380,10 @@ public final class LwjglWindow implements VideoSink {
     }
 
     /**
-     * Switches between a window and fullscreen on the monitor the window is on, in one of two
-     * ways ({@code --fullscreen}):
+     * Switches between a window and fullscreen on the monitor the window is on. In fullscreen,
+     * either key goes back to the window. There are two kinds:
      *
-     * <p><b>Borderless</b> (the default): a window without a frame, covering the monitor and
+     * <p><b>Borderless</b> (F11, quick): a window without a frame, covering the monitor and
      * one pixel more on every side. The switch is instant. Why the extra pixel: when a window
      * covers a monitor <i>exactly</i>, Windows hands it the display directly ("independent
      * flip", the same as exclusive fullscreen), and that change of presentation path makes a
@@ -383,21 +394,25 @@ public final class LwjglWindow implements VideoSink {
      * front; checked with screen captures). The cost: the compositor is in the way, so
      * G-Sync/FreeSync works here only if the driver allows it for windows (NVIDIA: "Enable
      * G-SYNC for windowed and full screen mode"); otherwise the steady clock judders slightly
-     * on a 144 Hz display.
+     * on a 144 Hz display. The compositor probably also adds up to one refresh of latency
+     * (~7 ms at 144 Hz; not measured).
      *
-     * <p><b>Exclusive</b>: GLFW's real fullscreen, at the monitor's resolution and, if
-     * {@code --refresh} was given, that refresh rate (on a 144 Hz display without
-     * G-Sync/FreeSync, 120 Hz gives perfectly even frames). Variable refresh works with the
-     * drivers' default settings, but each switch blanks the screen while the monitor re-syncs
-     * (measured: swaps stall for up to ~2.3 s after the switch; the blank looks longer).
+     * <p><b>Exclusive</b> (Alt+Enter, lowest latency): GLFW's real fullscreen, at the monitor's
+     * resolution and, if {@code --refresh} was given, that refresh rate (on a 144 Hz display
+     * without G-Sync/FreeSync, 120 Hz gives perfectly even frames). Variable refresh works with
+     * the drivers' default settings, but each switch blanks the screen while the monitor
+     * re-syncs (measured: swaps stall for up to ~2.3 s after the switch; the blank looks longer).
+     *
+     * @param kind the kind of fullscreen to enter, if the window isn't fullscreen already
      */
-    private void toggleFullscreen() {
-        if (!fullscreen) {
+    private void toggleFullscreen(Fullscreen kind) {
+        Fullscreen before = fullscreen;
+        if (fullscreen == Fullscreen.OFF) {
             glfwGetWindowPos(window, windowedX, windowedY);
             glfwGetWindowSize(window, windowedWidth, windowedHeight);
             long monitor = currentMonitor();
             GLFWVidMode desktop = glfwGetVideoMode(monitor);
-            if (options.exclusiveFullscreen()) {
+            if (kind == Fullscreen.EXCLUSIVE) {
                 int refresh = options.fullscreenRefresh() > 0 ? options.fullscreenRefresh() : desktop.refreshRate();
                 glfwSetWindowMonitor(window, monitor, 0, 0, desktop.width(), desktop.height(), refresh);
             } else {
@@ -410,14 +425,15 @@ public final class LwjglWindow implements VideoSink {
                         desktop.width() + 2 * BORDERLESS_OVERHANG, desktop.height() + 2 * BORDERLESS_OVERHANG,
                         GLFW_DONT_CARE);
             }
+            fullscreen = kind;
         } else {
             glfwSetWindowAttrib(window, GLFW_DECORATED, GLFW_TRUE);
             glfwSetWindowMonitor(window, NULL, windowedX[0], windowedY[0],
                     windowedWidth[0], windowedHeight[0], GLFW_DONT_CARE);
+            fullscreen = Fullscreen.OFF;
         }
-        fullscreen = !fullscreen;
         glfwSwapInterval(1);
-        if (options.exclusiveFullscreen()) {
+        if (before == Fullscreen.EXCLUSIVE || fullscreen == Fullscreen.EXCLUSIVE) {
             pacingNeedsCheck = true; // the refresh rate may have changed
         }
         // Borderless stays on the same monitor at the same refresh rate, so there's nothing to

@@ -10,13 +10,17 @@
 uniform usampler2D picture;   // R32UI texture of packed pixels
 uniform ivec2 pictureSize;    // the part of the texture in use: 256 x 224 (or 239)
 uniform vec4 viewport;        // where the picture is drawn, in window pixels: x, y, width, height
+uniform int flipY;            // 1: drawing to the window (OpenGL's row 0 is the bottom);
+                              // 0: into an offscreen texture stored top line first
 
 out vec4 color;
 
 void main() {
     // Where this fragment falls in the picture, 0..1, with y running downwards like the SNES.
     vec2 position = (gl_FragCoord.xy - viewport.xy) / viewport.zw;
-    position.y = 1.0 - position.y;
+    if (flipY != 0) {
+        position.y = 1.0 - position.y;
+    }
     // texelFetch reads exactly one texel (no filtering), so pixels stay sharp.
     ivec2 texel = clamp(ivec2(position * vec2(pictureSize)), ivec2(0), pictureSize - 1);
     uint pixel = texelFetch(picture, texel, 0).r;
