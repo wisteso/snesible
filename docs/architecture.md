@@ -205,5 +205,7 @@ So `InterruptControl` is created first and then `interrupts.connect(cpu)` once t
 
 ## Planned direction
 
-Milestone 10's remaining step (see `docs/m10-shader-plan.md`) is the rest of 10e: the beam
-scanlines are done, and a shadow mask is optional (the user doesn't want curvature). The core (`jfc.core`) must not depend on Swing or LWJGL (`CoreBoundaryTest`).
+Milestone 10 is done; its optional extras (shadow mask, 4:3 sharp pixels, NTSC settings) are
+listed in `frontend.md`. Next are Milestone 9 (debug tools, plan in `status.md`) and Milestone
+11 (enhanced audio, `m11-audio-plan.md`). In Milestone 11, an enhanced renderer runs alongside
+the unchanged `Dsp`, which stays the only audio state games can see. The core (`jfc.core`) must not depend on Swing or LWJGL (`CoreBoundaryTest`).

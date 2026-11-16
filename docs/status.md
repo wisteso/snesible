@@ -1,7 +1,8 @@
 # Project status
 
-Last updated: 2026-11-15, Milestone 10, merged into `main` after the user's play-tests. The
-frontend code is explained in `frontend.md`.
+Last updated: 2026-11-16. Milestone 10 is merged into `main` after the user's play-tests (the
+frontend code is explained in `frontend.md`), and its `m10-video` worktree and branch are
+removed. Milestone 11 (enhanced audio) was added as a plan.
 
 ## Milestones
 
@@ -20,6 +21,7 @@ frontend code is explained in `frontend.md`.
 | - | Offset-per-tile in modes 2 and 4 (Star Fox horizon); GSU background ROM/RAM buffers | see git log | done |
 | 9 | Debug and state-viewer tools (plan below) | - | planned |
 | 10 | Move video and input to LWJGL; CRT/NTSC shaders (plan: `m10-shader-plan.md`) | see git log | done, merged 2026-11-15: 10a (frontend boundary, 15-bit frame buffer), 10b (Java NTSC filter), 10c (package layout, OpenGL window, frame pacing), 10d (NTSC on the GPU), 10f (GLFW gamepads), and from 10e the beam-profile scanlines (the user likes them). Optional extras (shadow mask, 4:3 sharp pixels, NTSC settings) are listed in `frontend.md`; curvature was declined |
+| 11 | Enhanced audio, SNESamp-style: higher output rate, sinc/cubic interpolation, per-voice anti-aliasing, float mixing, stereo controls, Hardware/Quality presets (plan: `m11-audio-plan.md`) | - | planned; open decisions in the plan |
 
 ## What the user has confirmed by playing
 
