@@ -131,7 +131,8 @@ single thread is enough.
   Without the skip and the `glFinish`, the first launch once measured nonsense: right after
   a window appears, swaps return without waiting.
 - The window measures again on these events:
-  - F11.
+  - F11 with `--fullscreen exclusive` (borderless doesn't change the refresh rate, so it
+    skips the measurement).
   - Moving to another monitor: the position callback compares `currentMonitor()`, which is
     the monitor under the window's center.
   - Up to 3 times, 2 s apart, while vsync looks broken.
@@ -144,16 +145,37 @@ single thread is enough.
   title shows `NN fps (vsync|clock)`.
 
 ### Fullscreen (F11)
-- Exclusive fullscreen at the desktop resolution of the window's current monitor. It uses
-  `--refresh <hz>` if given, else the desktop rate. Leaving fullscreen restores the saved
-  window position and size.
-- **Every switch blanks the screen for about 4 s** on the user's G-Sync monitor. The
-  `glfwSetWindowMonitor` call takes 10-20 ms, but the swaps after it block while the monitor
-  re-syncs. A borderless window covering the screen was tried: Windows treats it as
-  fullscreen and pauses just as long, so it was removed. This isn't a JFC bug.
-- **The NVIDIA driver ignored `--refresh 120`** and stayed at 144 Hz (probably "Preferred
-  refresh rate: Highest available"). So the locked-vsync path has never run on the user's
-  real hardware. Only `PacingDecisionTest` covers it.
+Two kinds, chosen with `--fullscreen borderless|exclusive`. Borderless is the default, at the
+user's request (2026-11-15). Leaving either kind restores the saved window position and size.
+- **Borderless (default): instant.** It's an undecorated window **1 px larger than the
+  monitor on every side** (`BORDERLESS_OVERHANG`). `GlRenderer.draw` gets that margin, so the
+  picture stays inside the visible screen; the overhang is black and off-screen. Why the
+  extra pixel:
+  - A window that covers the monitor *exactly* gets promoted by Windows to "independent
+    flip", the same presentation path as exclusive fullscreen. That change makes the G-Sync
+    monitor re-sync, which is the ~4 s blank. A window that doesn't fit exactly stays with
+    the desktop compositor (DWM), so nothing changes for the monitor. Measured: no swap
+    over 9 ms when entering or leaving.
+  - It has to be *larger*, not smaller. Windows hides the taskbar only when the foreground
+    window covers the whole monitor. With a window 1 px short, the taskbar stayed in front;
+    with 1 px extra it was hidden. Both were checked with screen captures, and the user saw
+    the taskbar in one test.
+  - It isn't "always on top" (`GLFW_FLOATING`). It doesn't need to be, and Alt-Tab works
+    normally. When another window has focus, the taskbar shows again, as Windows always does.
+  - The cost: frames go through the compositor, so G-Sync/FreeSync engages only if the
+    driver allows it for windows (NVIDIA: "Enable G-SYNC for windowed and full screen
+    mode"). Otherwise the steady clock shows the slight 2-3 refresh judder at 144 Hz.
+- **Exclusive (`--fullscreen exclusive`):** GLFW's real fullscreen at the desktop
+  resolution of the window's current monitor, at `--refresh <hz>` if given, else the desktop
+  rate. Variable refresh works with default driver settings.
+  - **Every switch blanks the screen for about 4 s** on the user's G-Sync monitor. The
+    `glfwSetWindowMonitor` call takes 10-20 ms. After it, swaps stall now and then for up
+    to ~2.3 s while the monitor re-syncs; the visible blank lasts longer than the stalls.
+    A borderless window that *exactly* covers the screen pauses just as long (see above).
+    This isn't a JFC bug.
+  - **The NVIDIA driver ignored `--refresh 120`** and stayed at 144 Hz (probably "Preferred
+    refresh rate: Highest available"). So the locked-vsync path has never run on the user's
+    real hardware. Only `PacingDecisionTest` covers it.
 
 ### Keys (`handleKey`, `GlfwKeyboard`)
 - Window keys:
@@ -173,6 +195,11 @@ single thread is enough.
 ### Gamepads (`GlfwGamepads`)
 - At startup it adds every joystick already present, then listens for the joystick callback
   (connect/disconnect). The callback fires during `glfwPollEvents()`, on the main thread.
+  Gotcha: `glfwSetJoystickCallback` returns the *previous* callback, not the one you pass in.
+  So the callback is created with `GLFWJoystickCallback.create`, kept in a field (it must stay
+  alive while GLFW may call it), and freed in `close()`. An earlier version stored the return
+  value, which is null, and threw a NullPointerException on every quit, after the save was
+  written.
   There's no polling for devices, so none of winmm's ~160 ms stalls.
 - **Two paths per pad:**
   - `glfwJoystickIsGamepad(jid)` is true when the pad is in SDL's controller database, which
@@ -332,15 +359,18 @@ with scanlines on and off, over frames 1-3 (all burst phases).
 
 ## 8. Known limits, open items and future work
 
-**Not yet verified by the user** (they haven't play-tested 10c-10f yet):
+**Not yet verified by the user** (they played a few games with it on 2026-11-15, "everything seems fine", but these weren't checked specifically):
 - Buffalo pad button presses through GLFW (see section 4).
 - Whether G-Sync works in windowed mode. That needs NVIDIA's "Enable G-SYNC for windowed and
   full screen mode". Fullscreen is the reliable case.
 - The locked-vsync path on real hardware (the driver kept 144 Hz).
 
 **Known limits**
-- The ~4 s blank on each fullscreen switch (the display, not JFC).
-- Each refresh measurement pauses the game for ~0.4 s (at startup, F11, monitor change).
+- Borderless fullscreen (the default) gets G-Sync only with the driver's windowed G-Sync
+  setting. Exclusive fullscreen (`--fullscreen exclusive`) blanks for ~4 s per switch (the
+  display, not JFC).
+- Each refresh measurement pauses the game for ~0.4 s (at startup, exclusive-fullscreen
+  switches, monitor change).
 - Swing: no vsync, and a key held while the window loses focus can stick.
 - `--gamepad-test` reads winmm, not GLFW.
 - Only 2 players. Players shift down when pad 1 is unplugged.

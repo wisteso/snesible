@@ -155,18 +155,24 @@ final class GlRenderer {
     /**
      * Draws the current picture into a window whose drawable area is
      * {@code windowWidth x windowHeight} pixels.
+     *
+     * @param margin pixels to leave black on every side, outside the picture. The borderless
+     *               fullscreen window reaches past the screen's edges, and this keeps the
+     *               picture on the visible part.
      */
-    void draw(int windowWidth, int windowHeight) {
+    void draw(int windowWidth, int windowHeight, int margin) {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, windowWidth, windowHeight);
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
-        if (windowWidth <= 0 || windowHeight <= 0) {
+        int areaWidth = windowWidth - 2 * margin;
+        int areaHeight = windowHeight - 2 * margin;
+        if (areaWidth <= 0 || areaHeight <= 0) {
             return; // minimized
         }
 
-        // The largest rectangle with the picture's shape that fits, centered.
-        double scale = Math.min(windowWidth / (double) pictureWidth, windowHeight / (double) pictureHeight);
+        // The largest rectangle with the picture's shape that fits inside the margins, centered.
+        double scale = Math.min(areaWidth / (double) pictureWidth, areaHeight / (double) pictureHeight);
         int width = (int) (pictureWidth * scale);
         int height = (int) (pictureHeight * scale);
         int x = (windowWidth - width) / 2;

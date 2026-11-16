@@ -54,13 +54,17 @@ final class GlfwGamepads implements InputSource {
                 connected(jid);
             }
         }
-        callback = glfwSetJoystickCallback((jid, event) -> {
+        // Created explicitly and kept in a field: glfwSetJoystickCallback returns the *previous*
+        // callback, not this one, and this object must stay alive (and be freed at close) for
+        // as long as GLFW may call it.
+        callback = GLFWJoystickCallback.create((jid, event) -> {
             if (event == GLFW_CONNECTED) {
                 connected(jid);
             } else if (event == GLFW_DISCONNECTED) {
                 disconnected(jid);
             }
         });
+        glfwSetJoystickCallback(callback);
     }
 
     @Override

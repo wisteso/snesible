@@ -134,7 +134,7 @@ class GlRendererTest {
         int[] h = new int[1];
         glfwGetFramebufferSize(window, w, h);
         Assumptions.assumeTrue(w[0] == width && h[0] == height, "display scaling changed the size");
-        renderer.draw(width, height);
+        renderer.draw(width, height, 0);
         glFinish();
         int[] out = new int[width * height];
         glReadPixels(0, 0, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, out);
