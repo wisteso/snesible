@@ -1,8 +1,9 @@
 # Project status
 
-Last updated: 2026-11-16. Milestone 10 is merged into `main` after the user's play-tests (the
+Last updated: 2026-11-17. Milestone 10 is merged into `main` after the user's play-tests (the
 frontend code is explained in `frontend.md`), and its `m10-video` worktree and branch are
-removed. Milestone 11 (enhanced audio) was added as a plan.
+removed. Milestone 11 (enhanced audio) was added as a plan. Milestone 9 was re-planned as an
+ICU64-style visual memory debugger (`m9-debugger-plan.md`).
 
 ## Milestones
 
@@ -19,7 +20,7 @@ removed. Milestone 11 (enhanced audio) was added as a plan.
 | - | BG line numbering (+1) and render at dot 22 (Super Metroid HUD) | see git log | done |
 | 8 | Coprocessors: SuperFX (Star Fox, Yoshi's Island) and SA-1 (Super Mario RPG) | see git log | done; the user played all three ("pretty much perfectly") |
 | - | Offset-per-tile in modes 2 and 4 (Star Fox horizon); GSU background ROM/RAM buffers | see git log | done |
-| 9 | Debug and state-viewer tools (plan below) | - | planned |
+| 9 | Visual memory debugger, ICU64-style: heat map, inspect and edit RAM, tile and sprite viewer, maybe a value scanner (plan: `m9-debugger-plan.md`) | - | planned |
 | 10 | Move video and input to LWJGL; CRT/NTSC shaders (plan: `m10-shader-plan.md`) | see git log | done, merged 2026-11-15: 10a (frontend boundary, 15-bit frame buffer), 10b (Java NTSC filter), 10c (package layout, OpenGL window, frame pacing), 10d (NTSC on the GPU), 10f (GLFW gamepads), and from 10e the beam-profile scanlines (the user likes them). Optional extras (shadow mask, 4:3 sharp pixels, NTSC settings) are listed in `frontend.md`; curvature was declined |
 | 11 | Enhanced audio, SNESamp-style: higher output rate, sinc/cubic interpolation, per-voice anti-aliasing, float mixing, stereo controls, Hardware/Quality presets (plan: `m11-audio-plan.md`) | - | planned; open decisions in the plan |
 
@@ -146,52 +147,12 @@ Each is documented where it lives in the code.
 - All BW-RAM writes (console or SA-1) mark the save dirty, because the game keeps both work
   data and saves in BW-RAM. Saves are throttled to one per second by the window.
 
-## Milestone 9 plan: debug and state-viewer tools
+## Milestone 9 plan: visual memory debugger
 
-The user's stated goal after the emulator works: tools for viewing system state, for
-educational value. This plan was agreed in outline (the user inserted SuperFX as M8 first);
-the open decisions at the bottom still need the user's answer.
-
-**Shape**
-- A tabbed "Debugger" window in a new `jfc.debug` package (Swing), opened with F12. The core
-  only gets small hooks and stays free of Swing and of any dependency on `jfc.debug`.
-- A `DebugController` owns run / pause / step. It uses `Cpu.setInstructionListener`: the
-  listener blocks the emulation thread when a breakpoint hits or a step ends (audio just
-  underruns to silence while paused).
-- Viewers never read live state from the Swing thread. Between frames (or while paused) the
-  emulation thread copies a snapshot of what the open viewers need (VRAM, CGRAM, OAM,
-  registers, ...); views draw from it, refreshing about 10 times a second while running.
-- Viewers use side-effect-free `peek` accessors, so watching never changes what the game does
-  (no VRAM read-buffer or latch side effects).
-
-**Sub-steps (one reviewable commit each)**
-- **9a. Execution control and CPU view.** A table-driven 65816 disassembler (operand size from
-  M/X). Test idea: for every non-branch SingleStepTests case, the disassembled length must
-  equal the PC delta. Register and flag panel, disassembly around PC, pause / run / step
-  instruction / step scanline / step frame, PC breakpoints, read/write watchpoints. A headless
-  `--trace <rom> <frames> <out.txt>` in a common trace format, to diff against other emulators.
-- **9b. Memory and graphics viewers.** Hex viewer for WRAM, VRAM, CGRAM, OAM, ARAM, SRAM, ROM
-  (and SuperFX RAM) with change highlighting; palette viewer; tile viewer (2/4/8bpp, palette
-  choice); tilemap viewer per BG with the scroll viewport drawn on it; OAM table with sprite
-  previews; decoded PPU state (mode, layers, windows, color math, Mode 7 matrix); per-layer
-  main/sub toggles (a small mask in `Renderer`).
-- **9c. Event viewer.** A 341x262 beam-position grid with a dot for every register write, DMA,
-  HDMA, IRQ and NMI, with hover details; a per-channel DMA/HDMA table. Built on
-  `SnesBus.setRegisterWriteListener` (how the Super Metroid HUD split was found).
-- **9d. APU.** SPC700 disassembler (tested the same way), registers, stepping; DSP voice panel
-  (pitch, volume, ADSR/GAIN, envelope, source, KON), level meters, per-voice mute/solo (a small
-  mask in `Dsp`).
-
-**Hooks that already exist**
-- `Cpu.setInstructionListener(Registers)`: tracing, breakpoints, PC histograms.
-- `SnesBus.setRegisterWriteListener((address, value) -> ...)`: every hardware register write
-  from the CPU, DMA or HDMA. Combine it with `clock().v()/dot()` for a beam-position log.
-- `Ppu.peekVram/peekCgram/peekOam`, package-private layer state, `bgMode()`.
-- `Snes` accessors: `cpu()`, `bus()`, `clock()`, `ppu()`, `wram()`, `joypads()`,
-  `cartridge()`, `apu()`; `Apu.cpu()` exposes the SPC700 registers.
-
-**Open decisions (ask the user before starting M9)**
-1. One tabbed window (recommended) or one window per tool?
-2. Trace-log format: which emulator will the user diff against?
-3. Order 9a-9d as above, or graphics viewers first?
-4. Keep the tools in Swing after the LWJGL move (recommended), or Dear ImGui via LWJGL?
+Planned with the user on 2026-11-17; the full plan is `m9-debugger-plan.md`. In short: an
+ICU64-style debugger in two packages, `jfc.debug` (model and the `DebugMain` entry point, a
+subclass of `Main`) and `jfc.ui.debug` (raster UI in its own window). The core only gets
+`Observable.wrapXxx(...)` at five call sites (no-ops unless a debugger installed an observer)
+and a few read-only getters. Sub-milestones: 9a heat map, 9b inspect and edit (work RAM and
+cartridge RAM only), 9c tile and sprite viewer, 9d (maybe) value scanner. It replaces the older
+plan (disassemblers, tracing, breakpoints, Swing window).
