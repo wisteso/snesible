@@ -454,13 +454,13 @@ with scanlines on and off, over frames 1-3 (all burst phases).
 - Swing's "width > 256 means bilinear" check would turn on for hi-res sharp pixels.
 - Interlace doubles the height (448/478), and NTSC line doubling would have to stop.
 
-**Milestone 9 (debugger) interaction:** the plan keeps the debugger in Swing. Swing windows
-and a GLFW window in one process work on Windows and Linux. On macOS they fight over the main
-thread, so there the debugger would need the Swing video window. Viewers must take their
-snapshots between frames on the thread that runs `runFrame()`, which is the **main thread**
-in the OpenGL window. Package: the M10 layout lists it as `jfc.ui.debug`, while
-`status.md`'s older M9 plan says `jfc.debug`. Either keeps it out of `jfc.core`, so ask the
-user which one when M9 starts.
+**Milestone 9 (debugger) interaction** (plan: `m9-debugger-plan.md`): the debugger is *not*
+Swing. Swing next to a GLFW window fights over the main thread on macOS, so the debugger draws
+its own raster UI into an `int[]` ARGB buffer (package `jfc.ui.debug`, model in `jfc.debug`).
+The OpenGL frontend shows it in a second GLFW window (swap interval 0, plain pass-through
+shader, no NTSC); the Swing frontend in a second `JFrame`. Exclusive fullscreen (Alt+Enter)
+hides it; borderless (F11) doesn't. It updates between frames on the thread that runs
+`runFrame()`, which is the **main thread** in the OpenGL window.
 
 **Optional future features** (the user's list, 2026-11-15; none is planned work):
 - A CRT shadow/slot/aperture mask. It's marginal at 1440p, where a TV's ~650 slot columns
