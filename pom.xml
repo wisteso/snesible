@@ -84,6 +84,23 @@
     </dependencies>
 
     <build>
+        <resources>
+            <!-- The usual resources (the shaders)... -->
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- ...plus both license texts in the jar's META-INF, so the jar carries them when
+                 it's handed on: Snesible's MIT license, and the LGPL 2.1 that covers the
+                 snesible.ui.video.ntsc package and the snes-ntsc.frag shader. -->
+            <resource>
+                <directory>${project.basedir}</directory>
+                <targetPath>META-INF</targetPath>
+                <includes>
+                    <include>LICENSE</include>
+                    <include>LICENSE-LGPL-2.1.txt</include>
+                </includes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

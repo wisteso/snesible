@@ -1,7 +1,8 @@
 /*
  * Java port of snes_ntsc 0.2.2 by Shay Green (Blargg). Copyright (C) 2006-2007 Shay Green.
  * Licensed under the GNU Lesser General Public License, version 2.1 or later; see the
- * headers of the source files in this package.
+ * headers of the source files in this package. The license's full text is
+ * LICENSE-LGPL-2.1.txt at the project's root (and in the jar's META-INF).
  */
 
 /**

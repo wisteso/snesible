@@ -8,7 +8,8 @@
  * distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
  * implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser
  * General Public License for more details. You should have received a copy of the GNU Lesser
- * General Public License along with this module; if not, write to the Free Software
+ * General Public License along with this module (in Snesible: LICENSE-LGPL-2.1.txt at the
+ * project's root, and in the jar's META-INF); if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 package snesible.ui.video.ntsc;

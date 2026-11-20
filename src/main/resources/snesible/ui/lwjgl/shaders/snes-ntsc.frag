@@ -4,7 +4,8 @@
  *
  * Port of snes_ntsc 0.2.2 by Shay Green (Blargg), http://www.slack.net/~ant/
  * Copyright (C) 2006-2007 Shay Green. GLSL port for Snesible, 2026. Licensed under the GNU Lesser
- * General Public License, version 2.1 or later (see snesible.ui.video.ntsc for the full notice).
+ * General Public License, version 2.1 or later (see snesible.ui.video.ntsc for the full notice,
+ * and LICENSE-LGPL-2.1.txt at the project's root for the license's text).
  *
  * How it works (snesible.ui.video.ntsc.SnesNtsc explains the background):
  * - Setting up the filter simulates, once, how each of 8192 colors smears across neighboring

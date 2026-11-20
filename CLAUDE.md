@@ -23,8 +23,9 @@ Read these before working on the project:
 - Readability first, speed second. No runtime dependencies beyond the JDK (Gson is test-only),
   except LWJGL, used only by `snesible.ui.lwjgl`. Run the OpenGL window with `java -jar` (LWJGL is
   in `target/lib`); `java -cp target/classes` is fine for the headless tools.
-- `snesible.ui.video.ntsc` is a port of Blargg's `snes_ntsc` and stays LGPL 2.1+ with its notice;
-  don't move other code into it.
+- `snesible.ui.video.ntsc` (and the `snes-ntsc.frag` shader) is a port of Blargg's `snes_ntsc` and
+  stays LGPL 2.1+ with its notice; don't move other code into it. The LGPL's full text is
+  `LICENSE-LGPL-2.1.txt`; the rest of the project is MIT (`LICENSE`).
 - Keep `snesible.core` (the console) free of Swing, AWT, LWJGL, `snesible.ui` and `snesible.tools`
   (`CoreBoundaryTest` checks it). Headless tools go in `snesible.tools`, only `Main` in `snesible`. UI and input sit behind small
   boundaries (`VideoSink`, `InputSource`), so Swing and OpenGL windows share one core.
