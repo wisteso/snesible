@@ -373,8 +373,8 @@ What differs from, or adds to, the plan above:
   `GlfwToolWindow`, `SwingToolWindow`, and `--debug` in `Main` (hands over to `DebugMain` so
   `java -jar` works). Details in `frontend.md`.
 - **Checking:** `--debug-screenshot` (`snesible.tools.DebugScreenshot`) and `MemoryObserverTest`.
-  Checked on Super Mario World (all spaces), Star Fox (GSU writes and DMA in cartridge RAM)
-  and Super Mario RPG (SA-1 I-RAM, 4 MiB ROM), plus short window runs of both frontends.
+  Checked on the LoROM platformer (all spaces), the GSU-1 game (GSU writes and DMA in
+  cartridge RAM) and the SA-1 game (SA-1 I-RAM, 4 MiB ROM), plus short window runs of both frontends.
 - **First play-test (2026-11-17):** the game dropped frames in F11 fullscreen with the debugger
   maximized on the other monitor. Cause: a synchronous 14 MB `glTexImage2D` upload per frame
   (~8.4 ms) that the redraw pacer didn't count. Fixed with a pixel buffer object upload

@@ -113,7 +113,7 @@ is unaffected. Choosing the preset and the output rate belongs to `snesible.ui.a
 
 ## Testing
 
-- **Emulation untouched:** run several games (SMW, Yoshi's Island, Super Mario RPG) for 600
+- **Emulation untouched:** run several games (the LoROM platformer, the GSU-2 game, the SA-1 game) for 600
   frames with the renderer on and off. Hashes of audio RAM, DSP registers, WRAM and the frame
   buffer must be identical.
 - **Hardware preset unchanged:** its 32 kHz samples match the current `Dsp` output bit for bit.

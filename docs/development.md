@@ -20,11 +20,12 @@ failure details.
 
 ## Test data and ROMs (all git-ignored)
 
-- `roms/`: the user's own dumps: Super Mario World, A Link to the Past (has a copier
-  header), Super Metroid (FastROM), Turtles in Time, plus two SuperFX games: Star Fox (GSU-1,
-  copier header, no extended header) and Yoshi's Island (GSU-2, 2 MiB, battery-backed GSU RAM),
-  and Super Mario RPG (SA-1, 4 MiB, 32 KiB battery-backed BW-RAM).
-  All LoROM, USA.
+- `roms/`: the user's own dumps. The docs never name a game: they use the labels below, by
+  hardware and genre (a legal precaution; the user's rule). `roms/KEY.md`, also git-ignored,
+  maps each label to its file. The ROMs: the LoROM platformer, the action-adventure (has a
+  copier header), the FastROM action game, the beat-'em-up, two SuperFX games (the GSU-1 game:
+  copier header, no extended header; the GSU-2 game: 2 MiB, battery-backed GSU RAM), and the
+  SA-1 game (4 MiB, 32 KiB battery-backed BW-RAM). All LoROM, USA.
   `.srm` save files are written next to the ROMs.
 - `testdata/65816` (512 files) and `testdata/spc700` (256 files): the SingleStepTests suites,
   stored as gzip (`*.json.gz`, about 470 MB). Fetch with
@@ -85,7 +86,8 @@ J="$JAVA_HOME/bin/java"
   draws through Direct3D). Use `PrintWindow(hwnd, hdc, 2)` from a DPI-aware PowerShell
   (`SetProcessDPIAware`) instead; it works for the OpenGL window too, fullscreen included,
   but can block that window's drawing for seconds (one capture stalled a frame 6.8 s), so
-  don't capture during timing measurements. Zelda's title flashes white around frame 900.
+  don't capture during timing measurements. The action-adventure's title flashes white
+  around frame 900.
 - To press keys in the window from PowerShell, `SendKeys` doesn't reach it; tap Alt with
   `keybd_event` (Windows then allows `SetForegroundWindow`), then send the key with
   `keybd_event`.
@@ -95,7 +97,7 @@ J="$JAVA_HOME/bin/java"
   gaps up to ~33 ms).
 - `java -cp target/classes` has no LWJGL (it lives in `target/lib`); the headless tools don't
   need it, and playing falls back to the Swing window. Use `java -jar` for the OpenGL window.
-- Scripted presses hold for 6 frames. Useful SMW script: `START@320 START@450 START@600`
+- Scripted presses hold for 6 frames. Useful script for the LoROM platformer: `START@320 START@450 START@600`
   reaches the opening message; it can be dismissed only after about frame 1450 (see
   hardware-notes).
 - For audio, a scratch analyzer that prints RMS per 0.5 s and draws a spectrogram worked
@@ -115,7 +117,7 @@ J="$JAVA_HOME/bin/java"
   (input poll, audio write) the same way. GC logs (`-Xlog:gc`) ruled out garbage collection;
   the cause was winmm stalling ~160 ms on queries of empty joystick slots, which an automatic
   rescan every 2 s triggered (now on-demand with F9; see `Gamepads`).
-- Watch game RAM variables (e.g. SMW's `$0100` game mode) to tell game logic apart from
+- Watch game RAM variables (e.g. the LoROM platformer's `$0100` game mode) to tell game logic apart from
   emulator bugs.
 - Find code in a ROM by searching for instruction bytes (`od -An -tx1 -v | grep -ob`): byte
   offset = (match position - 1) / 3, then convert to a LoROM address.

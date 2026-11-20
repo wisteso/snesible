@@ -291,7 +291,7 @@ saved position and size. `toggleFullscreen(Fullscreen kind)` tracks the state in
 - **Horizontal:** NTSC pictures are sampled with linear filtering (smooth). Sharp pixels
   snap to texel centers (`smoothX = 0`), so they stay crisp sideways. Vertically, each
   sample sits at a row center, so lines never blend into each other.
-- **Tuning:** the constants are at the top of the shader. Checked by eye on Super Mario World
+- **Tuning:** the constants are at the top of the shader. Checked by eye on the LoROM platformer
   at 1440 px (6.4 px per line) and covered by `GlRendererTest`: a gray line's gap is
   dimmer than its center, white nearly closes the gap, black stays black, a single line
   lights only nearby rows, frames don't move the lines, and NTSC pictures get the same
@@ -529,7 +529,7 @@ top-down row convention described in section 4.
     6.8 s frame), so never capture while measuring timing.
   - Press keys by tapping Alt with `keybd_event`, then `SetForegroundWindow`, then
     `keybd_event` for the key.
-  - Zelda's title flashes white around frame 900. A white capture there is real.
+  - The action-adventure's title flashes white around frame 900. A white capture there is real.
 - **Lag hunting:** wrap the `VideoSink` in a scratch harness running the real
   `EmulationSession` and log gaps over 25 ms. GC logs (`-Xlog:gc`) ruled out garbage
   collection during the winmm investigation. Per-frame allocation is near zero: the session,
