@@ -642,4 +642,45 @@ public final class Ppu {
     public int peekOam(int byteAddress) {
         return oam[byteAddress];
     }
+
+    // ---- Port addresses ------------------------------------------------------------------------
+    // VRAM, CGRAM and OAM sit behind data ports: the CPU (or DMA) writes $2118, $2122 or $2104,
+    // and the PPU decides which word or byte that lands in from an address it keeps internally
+    // and steps forward by itself. A bus-level observer only sees the port register, so these
+    // read-only getters tell it where the next port access will go. None has side effects.
+    // Debug support: none of them is needed to emulate the console; they exist for the visual
+    // memory debugger and other tools.
+
+    /**
+     * The VRAM word ($0000-$7FFF) that the next $2118/$2119 write goes to, after address
+     * remapping ($2115 bits 2-3). $2118 writes its low byte, $2119 its high byte. A
+     * $2139/$213A read that steps the address refills the read buffer from this word too.
+     *
+     * <p><b>Debug support</b> (see the section comment above).
+     */
+    public int vramPortWordAddress() {
+        return remappedVramAddress();
+    }
+
+    /**
+     * The CGRAM byte (0-$1FF) the next $2122 write or $213B read goes to: the colour index
+     * times two, plus one when the port is waiting for a colour's second (high) byte. (A first
+     * byte is held in a latch until the second arrives, but both belong to this colour.)
+     *
+     * <p><b>Debug support</b> (see the section comment above).
+     */
+    public int cgramPortByteAddress() {
+        return cgramAddress * 2 + (cgramSecondByte ? 1 : 0);
+    }
+
+    /**
+     * The OAM byte (0-$21F) the next $2104 write or $2138 read goes to. Above $1FF the
+     * 32-byte high table repeats, so the address is folded into it the way the PPU does.
+     * (Low-table writes are held in pairs: an even byte is stored when the odd one arrives.)
+     *
+     * <p><b>Debug support</b> (see the section comment above).
+     */
+    public int oamPortByteAddress() {
+        return oamAddress < 0x200 ? oamAddress : 0x200 | (oamAddress & 0x1F);
+    }
 }

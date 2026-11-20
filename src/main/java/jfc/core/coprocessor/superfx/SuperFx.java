@@ -1,5 +1,7 @@
 package jfc.core.coprocessor.superfx;
 
+import static jfc.core.observe.Observable.wrapGsu;
+
 import jfc.core.cartridge.Cartridge;
 import jfc.core.cartridge.Mirroring;
 import jfc.core.coprocessor.Coprocessor;
@@ -76,7 +78,7 @@ public final class SuperFx implements Coprocessor {
         this.cartridge = cartridge;
         this.rom = cartridge.romBytes();
         this.ram = cartridge.ramBytes();
-        this.gsu = new Gsu(new GsuSide(), this::raiseInterrupt);
+        this.gsu = new Gsu(wrapGsu(new GsuSide()), this::raiseInterrupt);
         // Only the GSU-2 can address more than 1 MiB of ROM, so the size tells them apart well
         // enough for the version register.
         this.version = rom.length > 0x100000 ? 4 : 1;

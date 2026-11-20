@@ -14,13 +14,17 @@ import static jfc.core.cartridge.Mapper.offsetInBank;
  *
  * <p>The low six bits of the bank pick a 64 KiB slice of ROM. In banks $00-$3F the lower half of
  * each bank is taken by RAM and I/O, so only the upper 32 KiB of each slice shows there.
+ *
+ * <p><b>Debug support:</b> the class and its constructor are public only so the visual memory
+ * debugger ({@code jfc.debug}) can build its own mapper to turn bus addresses into ROM and
+ * SRAM offsets. Emulation itself only uses it through {@link Cartridge}.
  */
-final class HiRomMapper implements Mapper {
+public final class HiRomMapper implements Mapper {
 
     private final int romSize;
     private final int sramSize;
 
-    HiRomMapper(int romSize, int sramSize) {
+    public HiRomMapper(int romSize, int sramSize) {
         this.romSize = romSize;
         this.sramSize = sramSize;
     }

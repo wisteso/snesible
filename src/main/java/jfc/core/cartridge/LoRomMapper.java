@@ -18,13 +18,17 @@ import static jfc.core.cartridge.Mapper.offsetInBank;
  * timing.
  *
  * <p>Banks $7E-$7F always hold the console's 128 KiB work RAM, so they're never cartridge space.
+ *
+ * <p><b>Debug support:</b> the class and its constructor are public only so the visual memory
+ * debugger ({@code jfc.debug}) can build its own mapper to turn bus addresses into ROM and
+ * SRAM offsets. Emulation itself only uses it through {@link Cartridge}.
  */
-final class LoRomMapper implements Mapper {
+public final class LoRomMapper implements Mapper {
 
     private final int romSize;
     private final int sramSize;
 
-    LoRomMapper(int romSize, int sramSize) {
+    public LoRomMapper(int romSize, int sramSize) {
         this.romSize = romSize;
         this.sramSize = sramSize;
     }

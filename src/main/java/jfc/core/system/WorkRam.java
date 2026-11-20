@@ -45,6 +45,18 @@ public final class WorkRam {
         portAddress = (portAddress + 1) & (SIZE - 1);
     }
 
+    /**
+     * The 17-bit address the next $2180 read or write will use (0-$1FFFF). Reading it has no
+     * side effects. The bus only sees "an access to $2180", so this is how a memory viewer
+     * learns which work-RAM byte that access really touches.
+     *
+     * <p><b>Debug support:</b> not needed to emulate the console; it exists for the visual
+     * memory debugger and other tools.
+     */
+    public int portAddress() {
+        return portAddress;
+    }
+
     /** $2181-$2183 WMADDL/M/H: set one byte of the 17-bit port address. */
     public void writePortAddress(int register, int value) {
         switch (register) {

@@ -54,6 +54,8 @@ public final class EmulationSession {
 
     private AudioOutput audio;
     private long frameNumber;
+    /** Run after every frame, or null (see {@link #setAfterFrame}). */
+    private Runnable afterFrame;
 
     // Once-a-second measurements: frames run, and the longest and shortest gap between them.
     private long windowStart;
@@ -82,6 +84,16 @@ public final class EmulationSession {
     /** Prints timing and audio statistics once a second (the {@code --stats} option). */
     public void setPrintStats(boolean printStats) {
         this.printStats = printStats;
+    }
+
+    /**
+     * Runs {@code action} after every frame, on the thread that runs frames: the place where a
+     * tool window such as the memory debugger updates and redraws.
+     *
+     * <p><b>Debug support:</b> playing a game doesn't need it.
+     */
+    public void setAfterFrame(Runnable action) {
+        this.afterFrame = action;
     }
 
     /**
@@ -134,6 +146,9 @@ public final class EmulationSession {
         int sampleCount = snes.apu().drainSamples(samples);
         if (audio != null) {
             audio.play(samples, sampleCount);
+        }
+        if (afterFrame != null) {
+            afterFrame.run();
         }
         measure();
     }

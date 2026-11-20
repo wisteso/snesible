@@ -22,6 +22,7 @@ import jfc.ui.EmulationSession;
 import jfc.ui.Frame;
 import jfc.ui.InputSource;
 import jfc.ui.PlayOptions;
+import jfc.ui.ToolScreen;
 import jfc.ui.VideoSink;
 import jfc.ui.video.VideoFilter;
 import jfc.ui.video.VideoMode;
@@ -42,7 +43,8 @@ import jfc.ui.video.VideoMode;
  *
  * <p>Keys are listed in {@link jfc.ui.Controls}: the controller keys (see
  * {@link SwingKeyboard}), F2 = next picture mode (sharp pixels or one of the NTSC filters),
- * F3 = NTSC scanlines on/off, F9 = look for newly plugged-in gamepads, Escape = quit.
+ * F3 = NTSC scanlines on/off, F9 = look for newly plugged-in gamepads, F12 = show the tool
+ * window again (the memory debugger, when there is one), Escape = quit.
  *
  * <p>The window keeps the picture's shape when resized: 8:7 for sharp pixels (square SNES
  * pixels), and the NTSC filter's 602 x 448, which is close to a TV's 4:3.
@@ -71,6 +73,8 @@ public final class SwingWindow implements VideoSink {
 
     private JFrame frame;
     private Display display;
+    /** F12: shows the tool window again (does nothing without one). */
+    private Runnable showTool = () -> { };
 
     /**
      * Opens a Swing window and starts playing on an emulation thread paced by a steady clock.
@@ -82,6 +86,17 @@ public final class SwingWindow implements VideoSink {
      */
     public static void play(Snes snes, String title, Path saveFile, List<InputSource> extraInputs,
                             Runnable rescanDevices, PlayOptions options) {
+        play(snes, title, saveFile, extraInputs, rescanDevices, options, null);
+    }
+
+    /**
+     * Plays the game as above, with a tool screen (the memory debugger) in a second window,
+     * updated after every frame. F12 shows that window again after it was closed.
+     *
+     * @param toolScreen the screen for the second window, or null for none
+     */
+    public static void play(Snes snes, String title, Path saveFile, List<InputSource> extraInputs,
+                            Runnable rescanDevices, PlayOptions options, ToolScreen toolScreen) {
         SwingWindow window = new SwingWindow(title, options.videoMode(), options.scanlines());
         List<InputSource> inputs = new ArrayList<>(List.of(window.keyboard()));
         inputs.addAll(extraInputs);
@@ -90,7 +105,17 @@ public final class SwingWindow implements VideoSink {
         }
         EmulationSession session = new EmulationSession(snes, saveFile, window, inputs);
         session.setPrintStats(options.stats());
-        window.open(session::stop);
+        Runnable onClose = session::stop;
+        if (toolScreen != null) {
+            SwingToolWindow tool = SwingToolWindow.open(toolScreen);
+            session.setAfterFrame(tool::afterFrame);
+            window.showTool = tool::show;
+            onClose = () -> {
+                session.stop();
+                tool.dispose();
+            };
+        }
+        window.open(onClose);
         session.start();
     }
 
@@ -148,6 +173,17 @@ public final class SwingWindow implements VideoSink {
 
     /** Handles the window's own keys (quit, picture mode, ...) and passes the rest to the keyboard. */
     private boolean handleKey(KeyEvent e) {
+        boolean ours = e.getComponent() != null
+                && (e.getComponent() == frame || SwingUtilities.getWindowAncestor(e.getComponent()) == frame);
+        if (!ours && e.getID() != KeyEvent.KEY_RELEASED) {
+            // A key typed into another window (the tool window) is not a controller key. Key
+            // releases still go to the keyboard, so a key held while switching windows lets go.
+            return false;
+        }
+        if (e.getID() == KeyEvent.KEY_PRESSED && e.getKeyCode() == KeyEvent.VK_F12) {
+            showTool.run();
+            return true;
+        }
         if (e.getID() == KeyEvent.KEY_PRESSED && e.getKeyCode() == KeyEvent.VK_ESCAPE) {
             frame.dispose();
             return true;

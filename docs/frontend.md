@@ -454,13 +454,34 @@ with scanlines on and off, over frames 1-3 (all burst phases).
 - Swing's "width > 256 means bilinear" check would turn on for hi-res sharp pixels.
 - Interlace doubles the height (448/478), and NTSC line doubling would have to stop.
 
-**Milestone 9 (debugger) interaction** (plan: `m9-debugger-plan.md`): the debugger is *not*
-Swing. Swing next to a GLFW window fights over the main thread on macOS, so the debugger draws
-its own raster UI into an `int[]` ARGB buffer (package `jfc.ui.debug`, model in `jfc.debug`).
-The OpenGL frontend shows it in a second GLFW window (swap interval 0, plain pass-through
-shader, no NTSC); the Swing frontend in a second `JFrame`. Exclusive fullscreen (Alt+Enter)
-hides it; borderless (F11) doesn't. It updates between frames on the thread that runs
-`runFrame()`, which is the **main thread** in the OpenGL window.
+**The memory debugger's window** (Milestone 9a; plan: `m9-debugger-plan.md`). Started with
+`--debug` (or `jfc.debug.DebugMain`), which overrides `Main.createSnes` and
+`Main.createToolScreen`. The debugger is *not* Swing: Swing next to a GLFW window fights over
+the main thread on macOS, so it draws its own raster UI into an `int[]` ARGB buffer through
+the toolkit-free `jfc.ui.ToolScreen` interface (`jfc.ui.debug.DebugScreen`).
+- `EmulationSession.setAfterFrame` runs the window's `afterFrame` after every frame, on the
+  thread that runs frames (the main thread in the OpenGL window). That advances the recording
+  every frame; `ToolRedrawPacer` skips redraws when they're slow (a 4 MiB ROM zoomed out takes
+  ~17 ms), keeping the redraw cost under ~4 ms per frame on average. It times the *whole*
+  redraw (drawing, upload, swap), not just `render`.
+- OpenGL: `GlfwToolWindow`, a second GLFW window with its own context (made current to draw,
+  then the game's again, with `GL.setCapabilities` each time), swap interval 0, a pass-through
+  shader drawing the buffer 1:1. **Upload through a pixel buffer object (gotcha):** the first
+  version called `glTexImage2D(..., int[])` every frame, which with the window maximized on a
+  1440p screen (~3.5 M pixels, 14 MB) took ~8.4 ms on the emulation thread, synchronous
+  because the driver must copy a Java array before returning. Drawing took ~3.5 ms more, and
+  the pacer only timed the drawing, so the game dropped frames (reported in F11 fullscreen
+  with the debugger maximized on the other monitor). Now the texture's storage is allocated
+  only on resize, each frame is copied into an orphaned, mapped `GL_PIXEL_UNPACK_BUFFER` and
+  `glTexSubImage2D` reads from it at offset 0: ~0.7 ms. A full maximized redraw is ~4.9 ms
+  (was ~12.4), so the pacer redraws it every second frame. Opened to the right of the game, clamped to the monitor's
+  work area. F12 in the game window toggles it; its close button hides it; exclusive
+  fullscreen hides it and leaving shows it again; borderless (F11) keeps it.
+- Swing: `SwingToolWindow`, a second `JFrame`. Its events are queued and handed to the screen
+  on the emulation thread; it renders at device pixels (`getDefaultTransform()` scale), so it
+  stays sharp at 125% display scaling. F12 in the game window shows it again. `SwingWindow`'s
+  global key dispatcher now ignores keys typed into other windows (key releases still pass,
+  so a held key lets go).
 
 **Optional future features** (the user's list, 2026-11-15; none is planned work):
 - A CRT shadow/slot/aperture mask. It's marginal at 1440p, where a TV's ~650 slot columns

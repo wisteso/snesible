@@ -10,8 +10,12 @@ package jfc.core.coprocessor.superfx;
  * </pre>
  * Every access the GSU makes uses a 24-bit address in these terms: code is fetched from
  * {@code PBR:R15}, ROM data from {@code ROMBR:R14}, RAM data from {@code (bank $70 + RAMBR):address}.
+ *
+ * <p><b>Debug support:</b> public only so {@link jfc.core.observe.Observable#wrapGsu} can hand
+ * it to an outside observer (the visual memory debugger). Emulation itself only uses it inside
+ * this package.
  */
-interface GsuBus {
+public interface GsuBus {
 
     /** Reads ROM or RAM at a 24-bit GSU address. */
     int read(int address);

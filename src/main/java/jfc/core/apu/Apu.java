@@ -1,5 +1,7 @@
 package jfc.core.apu;
 
+import static jfc.core.observe.Observable.wrapSpc700;
+
 import jfc.core.system.MasterClock;
 
 /**
@@ -41,7 +43,7 @@ public final class Apu implements ApuPorts {
     private final MasterClock clock;
     private final long masterClockHz;
     private final byte[] ram = new byte[0x10000];
-    private final Spc700 cpu = new Spc700(new SpcSide());
+    private final Spc700 cpu = new Spc700(wrapSpc700(new SpcSide()));
     private final Dsp dsp = new Dsp(ram);
     private final Timer[] timers = {new Timer(128), new Timer(128), new Timer(16)};
 
@@ -138,6 +140,27 @@ public final class Apu implements ApuPorts {
 
     public Spc700 cpu() {
         return cpu;
+    }
+
+    /**
+     * The 64 KiB of sound RAM itself (not a copy), shared by the SPC700 and the DSP.
+     *
+     * <p><b>Debug support:</b> not needed to emulate the console; it exists for the visual
+     * memory debugger (showing sound RAM) and other tools.
+     */
+    public byte[] ramBytes() {
+        return ram;
+    }
+
+    /**
+     * A DSP register (0-$7F), read without side effects. This is what the SPC700 would read
+     * through $F2/$F3, including the values the DSP updates itself (ENVX, OUTX, ENDX).
+     *
+     * <p><b>Debug support:</b> not needed to emulate the console; the visual memory debugger
+     * uses it to see which voices are playing which samples.
+     */
+    public int peekDspRegister(int register) {
+        return dsp.read(register);
     }
 
     // =============================================================================================

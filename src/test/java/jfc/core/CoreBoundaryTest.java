@@ -13,7 +13,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Keeps the emulated console independent of any user interface: nothing in {@code jfc.core} may
- * use Swing, AWT, LWJGL or the {@code jfc.ui} and {@code jfc.tools} packages. The UI depends
+ * use Swing, AWT, LWJGL or the {@code jfc.ui}, {@code jfc.tools} and {@code jfc.debug} packages.
+ * (The debugger reaches into the core only through {@code jfc.core.observe}, never the reverse.) The UI depends
  * on the core, never the other way round, which is what lets Swing and LWJGL windows (and the
  * headless tools) share one emulator.
  *
@@ -37,7 +38,8 @@ class CoreBoundaryTest {
     private static final Path CORE_SOURCES = Path.of("src/main/java/jfc/core");
 
     private static final List<String> FORBIDDEN = List.of(
-            "java.awt", "javax.swing", "javax.imageio", "org.lwjgl", "jfc.ui", "jfc.tools");
+            "java.awt", "javax.swing", "javax.imageio", "org.lwjgl", "jfc.ui", "jfc.tools",
+            "jfc.debug");
 
     @Test
     void coreUsesNoUserInterfaceCode() throws IOException {
