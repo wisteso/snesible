@@ -33,5 +33,9 @@ Read these before working on the project:
 - Commit at the end of each milestone with the `Co-Authored-By` trailer. Never commit `roms/`,
   `testdata/`, `.srm` files or `gamepad.properties` (all git-ignored).
 - Don't embed copyrighted console code (the APU boot ROM is a clean-room replacement).
+- **Never name a game in the docs** (`.md` files): refer to ROMs generically, by the hardware
+  and genre labels listed in `docs/development.md` ("the GSU-1 game", "the LoROM
+  platformer"), as a legal precaution. No titles, characters, places or on-screen text either.
+  The git-ignored `roms/KEY.md` maps each label to its file.
 - When a milestone or major change lands, update `docs/status.md` (and the other docs if
   their facts changed).

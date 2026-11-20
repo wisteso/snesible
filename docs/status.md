@@ -21,20 +21,21 @@ ICU64-style visual memory debugger (`m9-debugger-plan.md`).
 | 5 | Battery saves (.srm), gamepad via winmm/FFM | `4278371` | done |
 | 6 | HDMA, windows, color math, Mode 7, mosaic | `42fead7` | done |
 | 7 | SPC700 (256k tests pass), DSP, sound output | `aa19df1` | done; the user confirmed audio "seems great" |
-| - | BG line numbering (+1) and render at dot 22 (Super Metroid HUD) | see git log | done |
-| 8 | Coprocessors: SuperFX (Star Fox, Yoshi's Island) and SA-1 (Super Mario RPG) | see git log | done; the user played all three ("pretty much perfectly") |
-| - | Offset-per-tile in modes 2 and 4 (Star Fox horizon); GSU background ROM/RAM buffers | see git log | done |
+| - | BG line numbering (+1) and render at dot 22 (the FastROM action game's HUD) | see git log | done |
+| 8 | Coprocessors: SuperFX (the GSU-1 and GSU-2 games) and SA-1 (the SA-1 game) | see git log | done; the user played all three ("pretty much perfectly") |
+| - | Offset-per-tile in modes 2 and 4 (the GSU-1 game's horizon); GSU background ROM/RAM buffers | see git log | done |
 | 9 | Visual memory debugger, ICU64-style: heat map, inspect and edit RAM, tile and sprite viewer, maybe a value scanner (plan: `m9-debugger-plan.md`) | - | 9a (heat map) built and play-tested by the user (`--debug`); maximized-window slowdown fixed, to re-check; 9b-9d planned |
 | 10 | Move video and input to LWJGL; CRT/NTSC shaders (plan: `m10-shader-plan.md`) | see git log | done, merged 2026-11-15: 10a (frontend boundary, 15-bit frame buffer), 10b (Java NTSC filter), 10c (package layout, OpenGL window, frame pacing), 10d (NTSC on the GPU), 10f (GLFW gamepads), and from 10e the beam-profile scanlines (the user likes them). Optional extras (shadow mask, 4:3 sharp pixels, NTSC settings) are listed in `frontend.md`; curvature was declined |
 | 11 | Enhanced audio, SNESamp-style: higher output rate, sinc/cubic interpolation, per-voice anti-aliasing, float mixing, stereo controls, Hardware/Quality presets (plan: `m11-audio-plan.md`) | - | planned; open decisions in the plan |
 
 ## What the user has confirmed by playing
 
-- SMW: plays well (keyboard and gamepad). Jitter fixed. Saves work at SMW's save points.
-- Super Metroid: plays well in the first minutes.
+- The LoROM platformer: plays well (keyboard and gamepad). Jitter fixed. Saves work at its
+  save points.
+- The FastROM action game: plays well in the first minutes.
 - Gamepad: all buttons map correctly with the defaults.
 - Audio: sounds great.
-- A minor HUD glitch in Super Metroid (the minimap's last line phasing in and out) was fixed by
+- A minor HUD glitch in the FastROM action game (the minimap's last line phasing in and out) was fixed by
   the BG line-numbering and render-timing changes. The user said per-pixel accuracy isn't worth
   chasing for glitches like this: make a moderate, scanline-level effort.
 
@@ -106,7 +107,7 @@ Each is documented where it lives in the code.
   every picture mode (10e's first part; the user asked for "improved scanlines"). They stay
   fixed from frame to frame, as 240p does. The user asked about alternating even and odd
   lines, which imitates 480i (interlace mode only). Checked with `GlRendererTest` and
-  renders of Super Mario World. The user: "look better than the old ones", no tuning needed.
+  renders of the LoROM platformer. The user: "look better than the old ones", no tuning needed.
 - `--refresh 120` in fullscreen still measured 144 Hz: the NVIDIA driver apparently keeps the
   highest refresh rate ("Preferred refresh rate: Highest available"). So the locked-to-vsync
   path hasn't run on real hardware yet; `PacingDecisionTest` covers the decision, and the
@@ -116,35 +117,35 @@ Each is documented where it lives in the code.
 - Coprocessors: SuperFX and SA-1. DSP-n, S-DD1 and others aren't planned.
 
 **SuperFX (Milestone 8)**
-- Verified headless: Star Fox reaches the title, controls screen (3D Arwing) and training
-  flight; Yoshi's Island reaches the title, file select and first level, and its message box
+- Verified headless: the GSU-1 game reaches the title, controls screen (a 3D ship) and
+  training flight; the GSU-2 game reaches the title, file select and first level, and its message box
   text (drawn by the GSU in 2bpp) is correct. Both run about 6x real time.
-- Fixed after the user spotted it: Yoshi's Island's message box border had see-through holes,
+- Fixed after the user spotted it: the GSU-2 game's message box border had see-through holes,
   and its intro storybook text box showed stripes. Both had one cause, which was in the HDMA
   code, not the SuperFX: channels enabled mid-frame never ran (see hardware-notes.md, HDMA).
 - The user played all three games in the window: "everything plays pretty much perfectly"
-  except two Star Fox issues:
-  - Fixed: the background's horizon sat lower than the 3D scene's vanishing point. Star Fox
-    uses mode 2 offset-per-tile, which wasn't implemented (see hardware-notes.md, PPU).
-  - Improved, not closed: the "scramble" launch scene after the briefing ran slower than in
+  except two issues in the GSU-1 game:
+  - Fixed: the background's horizon sat lower than the 3D scene's vanishing point. The
+    game uses mode 2 offset-per-tile, which wasn't implemented (see hardware-notes.md, PPU).
+  - Improved, not closed: the squadron launch scene after the briefing ran slower than in
     Snes9x (the user compared; the briefing itself was fine). The GSU's ROM-buffer fetches and
     RAM writes now run in the background as on the chip, which took the scene from ~8.9 to
     ~10.4 pictures/s. The user's Snes9x recording shows ~11.8. The user said this is a known
     hard problem, that Snes9x may run the GSU faster than real hardware, and that ~15 fps is
-    normal for Star Fox, so this is just noted. Details in hardware-notes.md (SuperFX).
+    normal for this game, so this is just noted. Details in hardware-notes.md (SuperFX).
     Comparing against bsnes, or a real-hardware recording, would show which side is off.
 - Simplifications: plotting writes pixels straight to RAM (same result as the pixel cache);
   a partly filled pixel-cache flush isn't charged its extra read; the GSU doesn't stall when it lacks the ROM/RAM bus;
   only CPU writes mark the battery RAM dirty (the GSU's frame-buffer writes don't).
 
 **SA-1 (Milestone 8, second half; the user asked for it right after the SuperFX)**
-- Verified headless on Super Mario RPG: Square logo, the full attract demo (garden, Koopa
-  Clown Car, beanstalk, an isometric battle), title, file select, name entry, the opening story,
-  the walk over the bridge into Bowser's Keep and around its hall. Music plays (checked by
+- Verified headless on the SA-1 game: the publisher's logo, the full attract demo (several
+  scenes and an isometric battle), title, file select, name entry, the opening story, and
+  walking through the first area. Music plays (checked by
   recording audio). About 5x real time.
 - After skipping the intro with Start, the title and file select are silent for about 6 s
   before the story music starts. The user confirmed the real game is silent there too.
-- Not implemented (Super Mario RPG doesn't use them in the parts tested; a temporary log
+- Not implemented (the SA-1 game doesn't use them in the parts tested; a temporary log
   showed it only initializes the timer to off and never starts a character-conversion DMA):
   the SA-1 H/V timer and its IRQ, character-conversion DMA (types 1 and 2), BW-RAM and I-RAM
   write protection, and ROM/BW-RAM bus-conflict waits.
@@ -163,7 +164,7 @@ plan (disassemblers, tracing, breakpoints, Swing window).
 
 **9a is built** (2026-11-17): `java -jar target/snesible-0.1.0-SNAPSHOT.jar --debug <rom>` opens the
 heat map beside the game (F12 toggles it); `--debug-screenshot` renders it headless. Checked
-with headless PNGs of SMW, Star Fox and Super Mario RPG and short runs of both windows. The
+with headless PNGs of the LoROM platformer, the GSU-1 game and the SA-1 game and short runs of both windows. The
 user's first play-test: it works, but the game dropped frames in F11 fullscreen with the
 debugger maximized on the other monitor; fixed (a pixel buffer object upload, ~8.4 to ~0.7 ms;
 see `frontend.md`), not yet re-checked by the user. What was built, and what's ready for 9b, is at the end of

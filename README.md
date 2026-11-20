@@ -11,7 +11,7 @@ Requires JDK 25 and Maven.
 
 ```bash
 mvn package
-java -jar target/snesible-0.1.0-SNAPSHOT.jar "roms/Super Mario World.sfc"
+java -jar target/snesible-0.1.0-SNAPSHOT.jar "roms/game.sfc"
 ```
 
 Keys: arrows = D-pad, X = A, Z = B, S = X, A = Y, Q = L, W = R, Enter = Start,
@@ -55,9 +55,9 @@ Other modes:
 
 ```bash
 java -jar target/snesible-0.1.0-SNAPSHOT.jar --info roms/*.sfc
-java -jar target/snesible-0.1.0-SNAPSHOT.jar --run "roms/Super Mario World.sfc" 300
-java -jar target/snesible-0.1.0-SNAPSHOT.jar --screenshot "roms/Super Mario World.sfc" 700 title.png START@320 START@450
-java -jar target/snesible-0.1.0-SNAPSHOT.jar --record-audio "roms/A Link to the Past.smc" 1800 zelda.wav
+java -jar target/snesible-0.1.0-SNAPSHOT.jar --run "roms/game.sfc" 300
+java -jar target/snesible-0.1.0-SNAPSHOT.jar --screenshot "roms/game.sfc" 700 title.png START@320 START@450
+java -jar target/snesible-0.1.0-SNAPSHOT.jar --record-audio "roms/game.sfc" 1800 game.wav
 ```
 
 `--info` prints cartridge headers. `--run` runs a game without video and reports where the CPU

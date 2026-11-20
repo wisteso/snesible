@@ -38,16 +38,16 @@ the test suites or by tracing real games. Before "fixing" behavior listed here, 
 - **Background line numbering**: backgrounds (including Mode 7) use the *beam* line number,
   and the first visible line is beam line 1. So at vertical scroll 0, picture line 0 shows map
   row **1** (`BackgroundLayer`: `screenY + 1 + vScroll`). Sprites don't share this offset.
-  Without it Super Metroid's HUD was one line low, and the minimap's bottom dotted row
+  Without it the FastROM action game's HUD was one line low, and the minimap's bottom dotted row
   (picture line 30) fell onto the split line. Verified against a Snes9x screenshot: dotted rows
   at picture lines 6, 14, 22, 30; gameplay from 31.
 - **When a line is drawn**: pixels start around dot 22. Register writes before that (late
-  horizontal blank) affect the whole line. Super Metroid's HUD IRQ (H+V at line 31, dot 152)
+  horizontal blank) affect the whole line. The FastROM action game's HUD IRQ (H+V at line 31, dot 152)
   writes TM at line 31 dot ~337 in some frames and at line 32 dot 2-3 in others. Rendering at
   dot 0 made line 31 flicker between HUD and gameplay; rendering at dot 22 makes it stable.
 - **Scroll registers** (`$210D-$2114`) use two latches: PPU1's (updated by every scroll write)
   and PPU2's (horizontal writes only). `hScroll = new<<8 | (ppu1Latch & ~7) | (ppu2Latch & 7)`.
-  **Don't mask to 10 bits before latching**: that dropped bit 2 and made SMW's layers jitter by
+  **Don't mask to 10 bits before latching**: that dropped bit 2 and made the LoROM platformer's layers jitter by
   4 px (fixed, regression test `horizontalScrollKeepsAllEightBitsOfTheFirstWrite`).
 - `$210D/$210E` also set the 13-bit Mode 7 scroll via the shared Mode 7 latch.
 - **Offset-per-tile** (modes 2 and 4; bsnes's behavior): BG3's map is a table, read at BG3's
@@ -55,7 +55,7 @@ the test suites or by tracing real games. Before "fixing" behavior listed here, 
   mode 4). Bit 13 applies an entry to BG1, bit 14 to BG2. Screen column *c* (counted after the
   layer's own fine scroll, `screenX + (hScroll & 7)`) uses table column *c - 1*; column 0 never
   uses the table. An H entry replaces bits 9-3 of the scroll and keeps the layer's bits 2-0;
-  a V entry replaces all 10 bits and still gets the beam-line +1. **Star Fox** draws its sky
+  a V entry replaces all 10 bits and still gets the beam-line +1. **The GSU-1 game** draws its sky
   and ground in mode 2 with every BG2 V entry `$40F8` (248) while BG2VOFS is 232. Without
   offset-per-tile the horizon sat 16 lines below the 3D scene's vanishing point (the user
   spotted it). Steering tilts the horizon in 8-pixel steps through these entries.
@@ -70,7 +70,7 @@ the test suites or by tracing real games. Before "fixing" behavior listed here, 
   is cleared, enabled or not, and "transfer this line" is cleared too and then set on all
   channels if any channel is enabled at that point (bsnes's hdmaReset/hdmaSetup). A channel
   enabled later then continues from its current $43x8-9 table address and $43xA counter.
-  Yoshi's Island sets those itself and enables HDMA at line 6; its message box window (window
+  The GSU-2 game sets those itself and enables HDMA at line 6; its message box window (window
   2 via indirect HDMA to $2126-$2129) and its intro text box depend on it. Before the fix, the
   box border had holes (BG1/BG2/sprites weren't masked) and the intro text never appeared.
   Regression test: `SnesTest.hdmaChannelEnabledMidFrameRunsFromItsCurrentTableAddress`.
@@ -90,7 +90,7 @@ the test suites or by tracing real games. Before "fixing" behavior listed here, 
 ## SuperFX (GSU)
 
 Sources: Fullsnes-style register descriptions and well-known emulator behavior, from memory;
-checked by `GsuTest`/`SuperFxTest` and by Star Fox and Yoshi's Island running.
+checked by `GsuTest`/`SuperFxTest` and by the GSU-1 and GSU-2 games running.
 
 - **Pipeline/delay slot**: the byte after any instruction that changes R15 (branches, JMP,
   LOOP, IWT/IBT/MOVE to R15) still executes. Branch targets are relative to the delay slot's
@@ -106,37 +106,36 @@ checked by `GsuTest`/`SuperFxTest` and by Star Fox and Yoshi's Island running.
 - **Plotting** writes SNES tiles directly (character-mapped screen); see `PlotUnit`.
 - **Bus sharing**: while the GSU runs with RON, console ROM reads return
   `00 01 00 01 04 01 00 01 00 01 08 01 00 01 0C 01` by address bits 3-0, so the native vectors
-  read COP $0104, BRK $0100, NMI $0108, IRQ $010C (work RAM). Star Fox's own header even lists
+  read COP $0104, BRK $0100, NMI $0108, IRQ $010C (work RAM). The GSU-1 game's own header even lists
   NMI $0108 / IRQ $010C. With RAN, console RAM reads are open bus.
-- **RAM size**: Yoshi's Island declares 32 KiB at $FFBD (extended header, developer ID $33).
-  Star Fox has no extended header; its board has 32 KiB, which is the default.
+- **RAM size**: the GSU-2 game declares 32 KiB at $FFBD (extended header, developer ID $33).
+  The GSU-1 game has no extended header; its board has 32 KiB, which is the default.
 - STOP raises the cartridge IRQ unless CFGR bit 7 is set; reading $3031 acknowledges it.
 - **Background ROM/RAM buffers**: refilling the ROM buffer (on an R14 write) and RAM byte
   writes run alongside later instructions; only the next use of the same buffer waits (as in
-  bsnes). Charging them up front made Star Fox noticeably slower in GSU-bound scenes.
-- **Star Fox frame rate** (measured headless by counting picture changes per 60 frames):
+  bsnes). Charging them up front made the GSU-1 game noticeably slower in GSU-bound scenes.
+- **The GSU-1 game's frame rate** (measured headless by counting picture changes per 60 frames):
   - The game caps itself at a new picture every third frame (20 fps): the title demo and the
     mission briefing run there, with the GSU only ~64% busy.
   - It copies each finished picture to VRAM in chunks, from an IRQ near line 207 (state in
     WRAM `$00`: 2, 4, 6, then 0 when done). A chunk is skipped while the GSU still owns its
-    RAM, so a GSU job that runs past line 207 costs a whole extra frame. In Training, job
+    RAM, so a GSU job that runs past line 207 costs a whole extra frame. In its training mode, job
     `01:AC1D` ran ~253 lines and made each picture take 4 frames instead of 3.
-  - The "scramble" launch scene: ~8.9 pictures/s with up-front buffer costs, ~10.4 with
-    background buffers. A Snes9x recording the user made (`docs/starfox-scramble.mp4`, not
-    committed) shows ~11.8, and covers the scene faster than we do. The user suspects Snes9x
-    runs the GSU faster than real hardware, and believes ~15 fps is normal for Star Fox.
+  - The squadron launch scene: ~8.9 pictures/s with up-front buffer costs, ~10.4 with
+    background buffers. A Snes9x recording the user made (not committed) shows ~11.8, and covers the scene faster than we do. The user suspects Snes9x
+    runs the GSU faster than real hardware, and believes ~15 fps is normal for this game.
 
 ## SA-1
 
 Sources: register descriptions from memory (Fullsnes/bsnes-style), checked by `Sa1Test` and by
-Super Mario RPG running.
+the SA-1 game running.
 
 - **Super MMC**: four 1 MiB windows (C/D/E/F at $2220-$2223). The HiROM views ($C0-$FF)
   always follow the registers; the LoROM views ($00-$3F, $80-$BF) only when the register's
   bit 7 is set, otherwise they show chunks 0-3. Power-on: chunks 0, 1, 2, 3.
 - The SA-1 starts **held in reset** (CCNT bit 5). The console sets CRV and clears the bit.
 - SA-1 vectors come from registers (CRV/CNV/CIV), never from ROM; the console's NMI/IRQ
-  vectors switch to SNV/SIV when SCNT bits 4/6 are set (Super Mario RPG's header says
+  vectors switch to SNV/SIV when SCNT bits 4/6 are set (the SA-1 game's header says
   NMI $0008 / IRQ $000C).
 - I-RAM (2 KiB) is at $3000-$37FF for both CPUs, and also at $0000-$07FF for the SA-1.
 - **Bitmap view** ($60-$6F, or the SA-1's $6000-$7FFF with BMAP bit 7): one pixel per
@@ -150,15 +149,15 @@ Super Mario RPG running.
 
 ## Game-specific observations (not bugs)
 
-- **Super Mario World**: the opening "Welcome to Dinosaur Land" message ignores buttons for
-  about 12 s after it opens. Timer `$1DF5` starts at `$B0` and drops every 4 frames (code at
-  `$05:B1xx`). SMW **only saves** at save prompts (castles, ghost houses, switch palaces, star
-  roads) and when a new file starts, not after ordinary levels. Its SRAM layout: 3 slots of `$8F`
+- **The LoROM platformer**: its opening message ignores buttons for about 12 s after it
+  opens. Timer `$1DF5` starts at `$B0` and drops every 4 frames (code at `$05:B1xx`). It
+  **only saves** at save prompts (after certain kinds of stages) and when a new file starts,
+  not after ordinary levels. Its SRAM layout: 3 slots of `$8F`
   bytes plus a 2-byte checksum, with backups from `$1AD`.
-- **Super Metroid**: the first ~30 s are sprite text ("1994", "METROID 3") over a Mode 7 scene
-  with BG1 disabled. That's the real intro; the title appears around frame 2000 (Start skips).
+- **The FastROM action game**: the first ~30 s are sprite text over a Mode 7 scene with BG1
+  disabled. That's the real intro; the title appears around frame 2000 (Start skips).
   It's FastROM and runs from bank `$80`.
-- **A Link to the Past**: has a 512-byte copier header in the user's dump (stripped).
+- **The action-adventure**: has a 512-byte copier header in the user's dump (stripped).
 - The Buffalo SNES pad (USB 0583:2060) shows in winmm as "Microsoft PC-joystick driver" with
   8 buttons in the order A, B, X, Y, L, R, Select, Start, which is the default mapping.
 

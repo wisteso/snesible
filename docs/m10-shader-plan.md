@@ -51,7 +51,7 @@ What the user's examples show, mapped to the model:
 - Dithered checkerboards blending into a solid colour, with rainbow fringes on edges:
   composite luma/chroma crosstalk (`artifacts`, `fringing`). The Genesis/Saturn examples are
   stronger than the SNES will be: their dot clocks relate differently to the subcarrier. On the
-  SNES the 3-pixel period gives the characteristic Snes9x look in the Zelda/Chrono shots.
+  SNES the 3-pixel period gives the characteristic Snes9x look in the user's two reference shots.
 - Faint horizontal lines (the Snes9x shots): a separate scanline option, not part of the NTSC
   model. In our pipeline it belongs to the CRT pass (a proper beam profile rather than
   Snes9x's "darken every other row by 12.5%").
@@ -209,7 +209,7 @@ header with credit to Shay Green, with the presets. Runs per frame on the emulat
 million multiply-adds, a millisecond or two). Adds `--screenshot ... --video composite`,
 and a hotkey in the Swing window. Why first:
 - It's the readable, educational version of the signal chain, and it's testable headless:
-  PNGs I can read and compare to the user's Snes9x shots (Zelda title, Chrono Trigger) before
+  PNGs I can read and compare to the user's Snes9x shots (the action-adventure's title and another RPG) before
   any GPU work.
 - It becomes the **reference** the GLSL port is diffed against in 10d.
 - The user gets the NTSC look early, without new dependencies.
