@@ -1,6 +1,6 @@
 # Hardware notes and findings
 
-Facts learned while building JFC that aren't obvious from the code alone, mostly confirmed by
+Facts learned while building Snesible that aren't obvious from the code alone, mostly confirmed by
 the test suites or by tracing real games. Before "fixing" behavior listed here, check this file.
 
 ## 65816 (confirmed by SingleStepTests)
@@ -80,7 +80,7 @@ the test suites or by tracing real games. Before "fixing" behavior listed here, 
 
 ## APU
 
-- **Boot ROM**: JFC uses a clean-room replacement (`BootRom`), not Nintendo's code. It writes
+- **Boot ROM**: Snesible uses a clean-room replacement (`BootRom`), not Nintendo's code. It writes
   `$BB` to port 1 *before* `$AA` to port 0, so a loader that sees `$AA` always finds `$BB`
   already there (a unit test caught the race the other way round). It re-enters cleanly at
   `$FFC0` (starts with CLRP and sets SP).

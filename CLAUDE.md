@@ -1,4 +1,4 @@
-# JFC: educational SNES emulator in Java
+# Snesible: educational SNES emulator in Java
 
 Read these before working on the project:
 
@@ -10,7 +10,7 @@ Read these before working on the project:
 - `docs/development.md`: toolchain paths, build and test commands, headless tools,
   debugging techniques, user conventions.
 - `docs/frontend.md`: the windows, video, NTSC filter, shaders, pacing, sound and input
-  (`jfc.ui`), with their gotchas and known limits. Read it before touching `jfc.ui`, and
+  (`snesible.ui`), with their gotchas and known limits. Read it before touching `snesible.ui`, and
   section 1 if you last worked before Milestone 10 (package move, raw frame buffer).
 
 ## Rules that apply every session
@@ -21,12 +21,12 @@ Read these before working on the project:
 - **Heavy documentation**: Javadoc explaining the hardware, plus `//` comments on any
   non-obvious logic. The user asked for this explicitly.
 - Readability first, speed second. No runtime dependencies beyond the JDK (Gson is test-only),
-  except LWJGL, used only by `jfc.ui.lwjgl`. Run the OpenGL window with `java -jar` (LWJGL is
+  except LWJGL, used only by `snesible.ui.lwjgl`. Run the OpenGL window with `java -jar` (LWJGL is
   in `target/lib`); `java -cp target/classes` is fine for the headless tools.
-- `jfc.ui.video.ntsc` is a port of Blargg's `snes_ntsc` and stays LGPL 2.1+ with its notice;
+- `snesible.ui.video.ntsc` is a port of Blargg's `snes_ntsc` and stays LGPL 2.1+ with its notice;
   don't move other code into it.
-- Keep `jfc.core` (the console) free of Swing, AWT, LWJGL, `jfc.ui` and `jfc.tools`
-  (`CoreBoundaryTest` checks it). Headless tools go in `jfc.tools`, only `Main` in `jfc`. UI and input sit behind small
+- Keep `snesible.core` (the console) free of Swing, AWT, LWJGL, `snesible.ui` and `snesible.tools`
+  (`CoreBoundaryTest` checks it). Headless tools go in `snesible.tools`, only `Main` in `snesible`. UI and input sit behind small
   boundaries (`VideoSink`, `InputSource`), so Swing and OpenGL windows share one core.
 - Verify with evidence: run the test suites, and use the headless `--run`, `--screenshot` and
   `--record-audio` modes (read PNGs with the Read tool). Don't claim a fix without checking it.

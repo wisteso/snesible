@@ -30,7 +30,7 @@ We re-implement the techniques from their descriptions and don't copy that code.
 
 ## Why the console sounds the way it does
 
-Our DSP (`jfc.core.apu.Dsp`) reproduces the hardware's sound path, including what limits it:
+Our DSP (`snesible.core.apu.Dsp`) reproduces the hardware's sound path, including what limits it:
 - **32 kHz output.** Nothing above 16 kHz can exist. Windows then resamples our 32 kHz stream to
   the device rate.
 - **Gaussian interpolation.** Each voice resamples its BRR samples to 32 kHz using 4 points
@@ -57,8 +57,8 @@ effective pitch (after pitch modulation), envelope, volumes, key-on/off and nois
 turns that into sound at the output rate. Checking this is easy: emulation state must match
 bit for bit with the renderer on or off (see Testing).
 
-The renderer lives in `jfc.core.apu`. It's pure computation with no UI, so `CoreBoundaryTest`
-is unaffected. Choosing the preset and the output rate belongs to `jfc.ui.audio`.
+The renderer lives in `snesible.core.apu`. It's pure computation with no UI, so `CoreBoundaryTest`
+is unaffected. Choosing the preset and the output rate belongs to `snesible.ui.audio`.
 
 ## Sub-steps (one reviewable commit each)
 

@@ -16,7 +16,7 @@ This is the plan as written before the code. **For how the code actually works, 
 2. A GPU shader pipeline (LWJGL + OpenGL) for that and for CRT effects (beam shape, mask,
    gamma, 4:3 aspect).
 3. Cross-platform keyboard and gamepad input from the same library.
-4. **Minimal impact on the emulation classes**: the core (`jfc.core.system` and below) should need
+4. **Minimal impact on the emulation classes**: the core (`snesible.core.system` and below) should need
    no changes at all. Everything happens behind a small frontend boundary.
 
 ## What the NTSC filter actually needs (answering "does it need prior frames?")
@@ -64,13 +64,13 @@ Two top-level areas instead of `ui` sitting next to `cpu` and `ppu`, and class n
 which toolkit they use:
 
 ```
-jfc                      Main: the command-line entry point
-jfc.tools                the headless tools (Screenshot, AudioRecording, HeadlessRun,
+snesible                      Main: the command-line entry point
+snesible.tools                the headless tools (Screenshot, AudioRecording, HeadlessRun,
                          CartridgeInfo, InputScript, GamepadTest)
-jfc.core                 the emulated console; no Swing, AWT, LWJGL or jfc.ui imports
+snesible.core                 the emulated console; no Swing, AWT, LWJGL or snesible.ui imports
   .cartridge .cpu .cpu.io .dma .bus .ppu .apu .system
   .coprocessor .coprocessor.sa1 .coprocessor.superfx
-jfc.ui                   everything that presents the console to a person
+snesible.ui                   everything that presents the console to a person
   (root)                 EmulationSession, VideoSink, InputSource, Frame (toolkit-neutral)
   .audio                 AudioOutput (and the dynamic rate control resampler)
   .video                 SnesColor, VideoFilter, VideoMode
@@ -83,19 +83,19 @@ jfc.ui                   everything that presents the console to a person
   .debug                 (Milestone 9) the Swing debugger windows
 ```
 
-Tests mirror the same packages. A small test scans `src/main/java/jfc/core` and fails if any
-file imports `java.awt`, `javax.swing`, `org.lwjgl` or `jfc.ui`, so the boundary can't erode.
-Shaders live in `src/main/resources/jfc/ui/lwjgl/shaders/`.
+Tests mirror the same packages. A small test scans `src/main/java/snesible/core` and fails if any
+file imports `java.awt`, `javax.swing`, `org.lwjgl` or `snesible.ui`, so the boundary can't erode.
+Shaders live in `src/main/resources/snesible/ui/lwjgl/shaders/`.
 
 ### The boundary (in the frontend; one small change in the PPU's output stage)
 
 ```
-            jfc.core.system.Snes  (unchanged)
+            snesible.core.system.Snes  (unchanged)
                    ^
                    |  runFrame(), joypads().setPressed(), apu().drainSamples(),
                    |  ppu().frameBuffer()/visibleLines(), cartridge() for saves
                    |
-   jfc.ui.EmulationSession   (Swing: its own thread, paced by audio)
+   snesible.ui.EmulationSession   (Swing: its own thread, paced by audio)
    or LwjglWindow + FramePacer (main thread, paced by the display; see Frame pacing)
      - each frame: buttons = InputSource.poll(); snes.runFrame(); VideoSink.present(frame)
                    |                              |
@@ -114,7 +114,7 @@ Shaders live in `src/main/resources/jfc/ui/lwjgl/shaders/`.
   emulation on its own thread, so nothing is shared).
 - **The core stops at what the PPU computes: 15-bit colour plus master brightness.** Each
   pixel is one `int`, `brightness << 15 | bgr15` (19 bits). Turning that into monitor RGB
-  moves to the frontend (`jfc.ui.video.SnesColor`, today's lookup table), used by Swing, PNG
+  moves to the frontend (`snesible.ui.video.SnesColor`, today's lookup table), used by Swing, PNG
   screenshots and the future debugger. The NTSC port reads the colour and brightness
   directly (applying brightness in 5-bit steps as Snes9x does), and the GPU path uploads the
   raw values as an integer texture (`GL_R32UI`) and does the maths in floating point. The
@@ -154,7 +154,7 @@ display sets the pace, and the sound adapts:
     slight judder; fullscreen at a requested 120 Hz avoids it.
 - Nothing vendor-specific: variable refresh is applied by the driver to any window presenting
   with vsync below the monitor's maximum rate, so the same code serves NVIDIA, AMD and Intel,
-  and JFC never needs to detect it. Caveat: windowed variable refresh depends on driver
+  and Snesible never needs to detect it. Caveat: windowed variable refresh depends on driver
   settings (NVIDIA: "Enable G-SYNC for windowed and full screen mode"); fullscreen (a key
   toggles it) is the reliable case.
 - All of this lives in the frontend (`LwjglWindow` and a small pacing class); the core only sees
@@ -198,13 +198,13 @@ cross-platform:
 ## Sub-steps (one reviewable commit each)
 
 **10a. Frontend boundary (no visible change).**
-First, as its own small commit: the PPU outputs colour + brightness and `jfc.ui.video.SnesColor`
+First, as its own small commit: the PPU outputs colour + brightness and `snesible.ui.video.SnesColor`
 converts to RGB. Then extract `EmulationSession` from the Swing window; add `VideoSink`,
 `InputSource`, `Frame`; make the Swing window implement them. Triple-buffer handoff. Check:
 all tests pass, the game plays exactly as before (user check), `--screenshot` unchanged.
 
 **10b. NTSC filter in plain Java (CPU), usable in Swing right away.**
-`jfc.ui.video.ntsc`: a readable Java port of `snes_ntsc` (decision 2), under its own LGPL
+`snesible.ui.video.ntsc`: a readable Java port of `snes_ntsc` (decision 2), under its own LGPL
 header with credit to Shay Green, with the presets. Runs per frame on the emulation side of the boundary (602x224 output, a few
 million multiply-adds, a millisecond or two). Adds `--screenshot ... --video composite`,
 and a hotkey in the Swing window. Why first:
@@ -252,7 +252,7 @@ emulation logic. Otherwise the frontend uses only accessors that exist today (`r
 burst phase live in the frontend. The Milestone 8/9 work in the other session can continue in
 parallel; this work lives on the `m10-video` branch in its own worktree. Merging: git's
 rename detection carries edits made on `main` to the moved files across, since only their
-first lines change. Files *added* on `main` in old packages (a new coprocessor, `jfc.debug`)
+first lines change. Files *added* on `main` in old packages (a new coprocessor, `snesible.debug`)
 must be moved by hand at merge time, and the docs will conflict where both sides edited them.
 Merging when the other session is between tasks keeps that small.
 
@@ -278,6 +278,6 @@ deciding together with M9's open decision 4.
 9. **Frame pacing lives entirely in the frontend**, vendor-neutral: locked to vsync on
    60 Hz multiples, steady clock with vsync otherwise (smooth on G-Sync/FreeSync monitors;
    the user's is a 144 Hz G-Sync display on NVIDIA).
-10. **Package layout**: `jfc.core` for the console, `jfc.ui` for everything presenting it,
-    `jfc.tools` for the headless tools, `Main` alone in `jfc`; toolkit-named classes
+10. **Package layout**: `snesible.core` for the console, `snesible.ui` for everything presenting it,
+    `snesible.tools` for the headless tools, `Main` alone in `snesible`; toolkit-named classes
     (`SwingWindow`, `LwjglWindow`). The aim is code that documents itself.

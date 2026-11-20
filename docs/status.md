@@ -1,6 +1,10 @@
 # Project status
 
-Last updated: 2026-11-17 (Milestone 9a built: the memory heat map). Milestone 10 is merged into `main` after the user's play-tests (the
+Last updated: 2026-11-20: the project was renamed from JFC to **Snesible** (folder
+`C:\dev\projects\snesible`, package `snesible`, jar `snesible-0.1.0-SNAPSHOT.jar`, test
+property `snesible.cpuTests`). Older commit messages still say JFC.
+
+2026-11-17 (Milestone 9a built: the memory heat map). Milestone 10 is merged into `main` after the user's play-tests (the
 frontend code is explained in `frontend.md`), and its `m10-video` worktree and branch are
 removed. Milestone 11 (enhanced audio) was added as a plan. Milestone 9 was re-planned as an
 ICU64-style visual memory debugger (`m9-debugger-plan.md`).
@@ -150,14 +154,14 @@ Each is documented where it lives in the code.
 ## Milestone 9 plan: visual memory debugger
 
 Planned with the user on 2026-11-17; the full plan is `m9-debugger-plan.md`. In short: an
-ICU64-style debugger in two packages, `jfc.debug` (model and the `DebugMain` entry point, a
-subclass of `Main`) and `jfc.ui.debug` (raster UI in its own window). The core only gets
+ICU64-style debugger in two packages, `snesible.debug` (model and the `DebugMain` entry point, a
+subclass of `Main`) and `snesible.ui.debug` (raster UI in its own window). The core only gets
 `Observable.wrapXxx(...)` at five call sites (no-ops unless a debugger installed an observer)
 and a few read-only getters. Sub-milestones: 9a heat map, 9b inspect and edit (work RAM and
 cartridge RAM only), 9c tile and sprite viewer, 9d (maybe) value scanner. It replaces the older
 plan (disassemblers, tracing, breakpoints, Swing window).
 
-**9a is built** (2026-11-17): `java -jar target/jfc-0.1.0-SNAPSHOT.jar --debug <rom>` opens the
+**9a is built** (2026-11-17): `java -jar target/snesible-0.1.0-SNAPSHOT.jar --debug <rom>` opens the
 heat map beside the game (F12 toggles it); `--debug-screenshot` renders it headless. Checked
 with headless PNGs of SMW, Star Fox and Super Mario RPG and short runs of both windows. The
 user's first play-test: it works, but the game dropped frames in F11 fullscreen with the

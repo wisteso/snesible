@@ -1,4 +1,4 @@
-# Frontend guide (`jfc.ui`, `jfc.tools`): how the Milestone 10 code works
+# Frontend guide (`snesible.ui`, `snesible.tools`): how the Milestone 10 code works
 
 Written for future sessions, so they can work on the windows, video, sound and input code without
 re-reading all of it. `architecture.md` has the overview; this file holds the details,
@@ -14,23 +14,23 @@ after the user's play-tests.
 
 If you last worked on `main` before Milestone 10, these are the changes that affect you:
 
-1. **Packages moved.** All emulation code is now under `jfc.core` (`jfc.cpu` became
-   `jfc.core.cpu`, `jfc.ppu` became `jfc.core.ppu`, and so on). The windows, sound and input
-   are under `jfc.ui`, and the headless tools are under `jfc.tools`. Only `Main` is left in
-   `jfc`. The move changed only `package` lines and imports, no logic. Any new file you add
+1. **Packages moved.** All emulation code is now under `snesible.core` (`snesible.cpu` became
+   `snesible.core.cpu`, `snesible.ppu` became `snesible.core.ppu`, and so on). The windows, sound and input
+   are under `snesible.ui`, and the headless tools are under `snesible.tools`. Only `Main` is left in
+   `snesible`. The move changed only `package` lines and imports, no logic. Any new file you add
    on `main` in an old package has to be moved by hand when merging.
 2. **The PPU frame buffer no longer holds RGB.** Each `int` is
    `brightness << 15 | bgr15` (19 bits: master brightness 0-15, then 15-bit BGR as in CGRAM).
    This was the only logic change to emulation code (step 5 of `Renderer`). To get RGB, call
-   `jfc.ui.video.SnesColor.toRgb(pixel)`. Anything that reads `ppu().frameBuffer()` (tests,
+   `snesible.ui.video.SnesColor.toRgb(pixel)`. Anything that reads `ppu().frameBuffer()` (tests,
    tools, the Milestone 9 debugger) has to convert. Why: a filter or shader needs the exact
    SNES color even during fades, and a 24-bit value below full brightness has lost it.
-3. **`jfc.core` may not import** `java.awt`, `javax.swing`, `javax.imageio`, `org.lwjgl`,
-   `jfc.ui` or `jfc.tools`. `CoreBoundaryTest` scans the sources and fails the build if it
+3. **`snesible.core` may not import** `java.awt`, `javax.swing`, `javax.imageio`, `org.lwjgl`,
+   `snesible.ui` or `snesible.tools`. `CoreBoundaryTest` scans the sources and fails the build if it
    does.
 4. **The OpenGL window is now the default**, and the Swing window is behind `--swing`. LWJGL
-   is the only runtime dependency, and only `jfc.ui.lwjgl` uses it. Run the game with
-   `java -jar target/jfc-0.1.0-SNAPSHOT.jar`: the manifest puts the jars in `target/lib` on
+   is the only runtime dependency, and only `snesible.ui.lwjgl` uses it. Run the game with
+   `java -jar target/snesible-0.1.0-SNAPSHOT.jar`: the manifest puts the jars in `target/lib` on
    the class path. `java -cp target/classes` has no LWJGL. The headless tools work that way,
    and playing falls back to Swing.
 5. **The sound card no longer sets the pace.** Frames are paced by the display or a steady
@@ -43,10 +43,10 @@ If you last worked on `main` before Milestone 10, these are the changes that aff
 ## 2. The boundary
 
 ```
-jfc.core.system.Snes                      (the console; knows nothing about screens)
+snesible.core.system.Snes                      (the console; knows nothing about screens)
       ^  runFrame(), joypads().setPressed(), apu().drainSamples(),
       |  ppu().frameBuffer()/visibleLines(), cartridge() for saves
-jfc.ui.EmulationSession                   (owns the Snes: input -> frame -> video -> audio -> saves)
+snesible.ui.EmulationSession                   (owns the Snes: input -> frame -> video -> audio -> saves)
       |                         |
  InputSource.poll(int[])   VideoSink.present(Frame)
 ```
@@ -86,7 +86,7 @@ GLFW must be used on the main thread: macOS requires it, and the GL context belo
 creator. Never call GLFW or GL from another thread. Emulating a frame takes a few ms, so a
 single thread is enough.
 
-## 4. The OpenGL window (`jfc.ui.lwjgl`)
+## 4. The OpenGL window (`snesible.ui.lwjgl`)
 
 ### Startup (`Main.play` → `LwjglWindow.open` → `play`)
 - `open()`:
@@ -178,7 +178,7 @@ saved position and size. `toggleFullscreen(Fullscreen kind)` tracks the state in
     `glfwSetWindowMonitor` call takes 10-20 ms. After it, swaps stall now and then for up
     to ~2.3 s while the monitor re-syncs; the visible blank lasts longer than the stalls.
     A borderless window that *exactly* covers the screen pauses just as long (see above).
-    This isn't a JFC bug.
+    This isn't a Snesible bug.
   - **The NVIDIA driver ignored `--refresh 120`** and stayed at 144 Hz (probably "Preferred
     refresh rate: Highest available"). So the locked-vsync path has never run on the user's
     real hardware. Only `PacingDecisionTest` covers it.
@@ -230,7 +230,7 @@ saved position and size. `toggleFullscreen(Fullscreen kind)` tracks the state in
   2). If pad 1 is unplugged, pad 2 becomes controller 1. The winmm reader does the same. A
   third pad is reported and ignored.
 
-### Rendering (`GlRenderer`, shaders in `src/main/resources/jfc/ui/lwjgl/shaders/`)
+### Rendering (`GlRenderer`, shaders in `src/main/resources/snesible/ui/lwjgl/shaders/`)
 - Every frame, the raw 19-bit pixels go unchanged into `rawTexture` (`GL_R32UI`) with
   `glTexSubImage2D`. Integer textures can't be filtered, so it's `GL_NEAREST` and the
   shaders read it with `texelFetch`.
@@ -329,7 +329,7 @@ with scanlines on and off, over frames 1-3 (all burst phases).
   clamp is copied from `SnesNtsc.clamp`.
 - Scanlines darken odd output rows by 1/8 (`rgb - (rgb>>3 & 0x1F1F1F)`), as Snes9x does.
 
-## 5. The Swing window (`jfc.ui.swing`) and winmm gamepads
+## 5. The Swing window (`snesible.ui.swing`) and winmm gamepads
 
 - `SwingWindow.play()` builds the window and the session, then `session.start()`. Its
   `present()` runs on the emulation thread:
@@ -343,7 +343,7 @@ with scanlines on and off, over frames 1-3 (all burst phases).
 - Keys are read through a `KeyEventDispatcher`, so they work whichever component has focus.
 - No vsync, so frames can tear or be shown twice. This is the fallback window. The user
   chose to keep it (`--swing`).
-- Gamepads: `jfc.ui.input.winmm.Gamepads` plus `WinmmJoysticks` (FFM calls into
+- Gamepads: `snesible.ui.input.winmm.Gamepads` plus `WinmmJoysticks` (FFM calls into
   `winmm.dll`). Windows only.
   - It looks for pads at startup and again only on F9 (`requestRescan()`). The search runs
     at the start of the next `poll`.
@@ -354,13 +354,13 @@ with scanlines on and off, over frames 1-3 (all burst phases).
     are latency-sensitive. Don't add automatic rescanning back.
 - `--gamepad-test --swing` reads pads through winmm, as this window does (see below).
 
-### `--gamepad-test` (`jfc.tools.GamepadTest`)
+### `--gamepad-test` (`snesible.tools.GamepadTest`)
 - It lists the pads and prints every change of the first pad's raw state (button numbers,
   axes, hat) next to the SNES buttons it maps to. Use it to write `gamepad.properties`.
 - **It reads pads the way the chosen window does**, because the two readers could number
   buttons differently:
-  - By default it reads through GLFW, like the OpenGL window, via `jfc.ui.lwjgl.GlfwJoysticks`
-    (public: the tool sits outside `jfc.ui.lwjgl`, the only package allowed to use LWJGL).
+  - By default it reads through GLFW, like the OpenGL window, via `snesible.ui.lwjgl.GlfwJoysticks`
+    (public: the tool sits outside `snesible.ui.lwjgl`, the only package allowed to use LWJGL).
     For a pad in GLFW's database it says the pad is mapped by position and that
     `gamepad.properties` doesn't apply, and it shows the positional SNES buttons.
   - `--gamepad-test --swing` reads through winmm, like the Swing window.
@@ -369,7 +369,7 @@ with scanlines on and off, over frames 1-3 (all burst phases).
 - Run it with `java -jar`. With `-cp target/classes` there's no LWJGL; it says so and
   suggests `--swing`.
 
-## 6. Video conversion (`jfc.ui.video`) and the NTSC port (`jfc.ui.video.ntsc`)
+## 6. Video conversion (`snesible.ui.video`) and the NTSC port (`snesible.ui.video.ntsc`)
 
 - `SnesColor`: plain RGB from a packed pixel through a 2^19-entry lookup table (2 MiB).
   Channels are widened 5→8 bits by copying the top bits, then `*brightness/15`, rounded
@@ -399,7 +399,7 @@ with scanlines on and off, over frames 1-3 (all burst phases).
     "darken every second row". The OpenGL window draws beams instead (`crt-scanlines.frag`,
     section 4).
 
-## 7. Sound (`jfc.ui.audio`)
+## 7. Sound (`snesible.ui.audio`)
 
 - `AudioOutput`: Java Sound, 32 kHz, 16-bit stereo, with a **128 ms device buffer**
   (4096 frames). It writes half a buffer of silence at open, so it starts at the target
@@ -431,7 +431,7 @@ with scanlines on and off, over frames 1-3 (all burst phases).
 **Known limits**
 - Borderless fullscreen (F11) gets G-Sync only with the driver's windowed G-Sync setting,
   and probably adds about one refresh of latency. Exclusive fullscreen (Alt+Enter) blanks for
-  ~4 s per switch (the display, not JFC).
+  ~4 s per switch (the display, not Snesible).
 - Each refresh measurement pauses the game for ~0.4 s (at startup, exclusive-fullscreen
   switches, monitor change).
 - Swing: no vsync, and a key held while the window loses focus can stick.
@@ -455,10 +455,10 @@ with scanlines on and off, over frames 1-3 (all burst phases).
 - Interlace doubles the height (448/478), and NTSC line doubling would have to stop.
 
 **The memory debugger's window** (Milestone 9a; plan: `m9-debugger-plan.md`). Started with
-`--debug` (or `jfc.debug.DebugMain`), which overrides `Main.createSnes` and
+`--debug` (or `snesible.debug.DebugMain`), which overrides `Main.createSnes` and
 `Main.createToolScreen`. The debugger is *not* Swing: Swing next to a GLFW window fights over
 the main thread on macOS, so it draws its own raster UI into an `int[]` ARGB buffer through
-the toolkit-free `jfc.ui.ToolScreen` interface (`jfc.ui.debug.DebugScreen`).
+the toolkit-free `snesible.ui.ToolScreen` interface (`snesible.ui.debug.DebugScreen`).
 - `EmulationSession.setAfterFrame` runs the window's `afterFrame` after every frame, on the
   thread that runs frames (the main thread in the OpenGL window). That advances the recording
   every frame; `ToolRedrawPacer` skips redraws when they're slow (a 4 MiB ROM zoomed out takes
@@ -511,7 +511,7 @@ top-down row convention described in section 4.
   | `AudioResamplerTest` | the resampler |
   | `GlfwGamepadsTest` | standard layout, triggers, stick, hats; uses `GLFWGamepadState.create()`, so no pad or window needed |
   | `GamepadMappingTest` | the button mapping |
-  | `CoreBoundaryTest` | `jfc.core` imports |
+  | `CoreBoundaryTest` | `snesible.core` imports |
 
   Surefire runs with `--enable-native-access=ALL-UNNAMED` (pom `argLine`). The whole suite
   is about 927 tests and takes about 10 s.
@@ -551,7 +551,7 @@ top-down row convention described in section 4.
   dynamic rate control for sound.
 - **`--gamepad-test` moving to GLFW:** it reads both ways instead: GLFW by default, winmm
   with `--swing`.
-- **Shader location:** `src/main/resources/jfc/ui/lwjgl/shaders/`, not
+- **Shader location:** `src/main/resources/snesible/ui/lwjgl/shaders/`, not
   `src/main/resources/shaders/`.
 - **CPU NTSC in the OpenGL window:** the plan offered it. The user saw no use for it, so
   NTSC there runs on the GPU only.
