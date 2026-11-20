@@ -14,6 +14,7 @@ import jfc.ui.FrameClock;
 import jfc.ui.InputSource;
 import jfc.ui.PacingMode;
 import jfc.ui.PlayOptions;
+import jfc.ui.ToolScreen;
 import jfc.ui.VideoSink;
 import jfc.ui.input.GamepadMapping;
 import jfc.ui.video.VideoMode;
@@ -22,6 +23,7 @@ import org.lwjgl.glfw.Callbacks;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
+import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.system.Configuration;
 
 /**
@@ -56,7 +58,7 @@ import org.lwjgl.system.Configuration;
  *
  * <p>Keys: the controller keys (see {@link GlfwKeyboard}), F2 = next picture mode,
  * F3 = scanlines, F11 = borderless fullscreen, Alt+Enter = exclusive fullscreen,
- * Escape = quit. Gamepads come and go by themselves ({@link GlfwGamepads}).
+ * F12 = show or hide the tool window (the memory debugger, when there is one), Escape = quit. Gamepads come and go by themselves ({@link GlfwGamepads}).
  */
 public final class LwjglWindow implements VideoSink {
 
@@ -82,7 +84,11 @@ public final class LwjglWindow implements VideoSink {
     private final PlayOptions options;
     private final GlfwKeyboard keyboard = new GlfwKeyboard();
     private long window;
+    /** The game context's OpenGL functions (LWJGL keeps them per context and thread). */
+    private GLCapabilities capabilities;
     private GlRenderer renderer;
+    /** The memory debugger's window, or null when playing normally. */
+    private GlfwToolWindow tool;
 
     // Picture mode, changed with F2/F3.
     private VideoMode mode;
@@ -145,10 +151,24 @@ public final class LwjglWindow implements VideoSink {
      * @param mapping  button mapping for gamepads that aren't in GLFW's gamepad database
      */
     public void play(Snes snes, Path saveFile, GamepadMapping mapping) {
+        play(snes, saveFile, mapping, null);
+    }
+
+    /**
+     * Plays the game as {@link #play(Snes, Path, GamepadMapping)}, with a tool screen (the
+     * memory debugger) in a second window beside it, updated after every frame.
+     *
+     * @param toolScreen the screen for the second window, or null for none
+     */
+    public void play(Snes snes, Path saveFile, GamepadMapping mapping, ToolScreen toolScreen) {
         GlfwGamepads gamepads = new GlfwGamepads(mapping);
         List<InputSource> inputs = List.of(keyboard, gamepads);
         EmulationSession session = new EmulationSession(snes, saveFile, this, inputs);
         session.setPrintStats(options.stats());
+        if (toolScreen != null) {
+            tool = GlfwToolWindow.open(toolScreen, window, capabilities, currentMonitor());
+            session.setAfterFrame(tool::afterFrame);
+        }
         try {
             choosePacing(session.framesPerSecond()); // measure the display before the sound starts
             session.powerOn();
@@ -156,6 +176,9 @@ public final class LwjglWindow implements VideoSink {
             session.powerOff();
         } finally {
             gamepads.close();
+            if (tool != null) {
+                tool.destroy();
+            }
             renderer.delete();
             Callbacks.glfwFreeCallbacks(window);
             glfwDestroyWindow(window);
@@ -194,7 +217,7 @@ public final class LwjglWindow implements VideoSink {
         centerOn(glfwGetPrimaryMonitor());
 
         glfwMakeContextCurrent(window);
-        GL.createCapabilities();
+        capabilities = GL.createCapabilities();
         glfwSwapInterval(1); // vsync: each swap waits for the display's next refresh
         renderer = new GlRenderer();
 
@@ -372,6 +395,12 @@ public final class LwjglWindow implements VideoSink {
                     toggleFullscreen(Fullscreen.BORDERLESS);
                     return;
                 }
+                case GLFW_KEY_F12 -> {
+                    if (tool != null) {
+                        tool.toggle();
+                    }
+                    return;
+                }
                 default -> {
                 }
             }
@@ -433,6 +462,10 @@ public final class LwjglWindow implements VideoSink {
             fullscreen = Fullscreen.OFF;
         }
         glfwSwapInterval(1);
+        if (tool != null) {
+            // The debugger stays out of exclusive fullscreen (use borderless, F11, with it).
+            tool.setExclusiveFullscreen(fullscreen == Fullscreen.EXCLUSIVE);
+        }
         if (before == Fullscreen.EXCLUSIVE || fullscreen == Fullscreen.EXCLUSIVE) {
             pacingNeedsCheck = true; // the refresh rate may have changed
         }

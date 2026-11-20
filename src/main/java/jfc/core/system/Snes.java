@@ -1,5 +1,8 @@
 package jfc.core.system;
 
+import static jfc.core.observe.Observable.wrapCpu;
+import static jfc.core.observe.Observable.wrapDma;
+
 import jfc.core.apu.Apu;
 import jfc.core.bus.SnesBus;
 import jfc.core.cartridge.Cartridge;
@@ -62,11 +65,11 @@ public final class Snes implements MasterClock.Listener {
         this.coprocessor = Coprocessors.forCartridge(cartridge);
         CartridgeSlot slot = coprocessor != null ? coprocessor : cartridge;
         this.bus = new SnesBus(clock, wram, slot, ppu, apu, interrupts, math, joypads, dma);
-        this.cpu = new Cpu(bus);
+        this.cpu = new Cpu(wrapCpu(bus));
         // The interrupt logic drives the CPU's NMI and IRQ pins, but the CPU can only be built
         // once its bus exists, and the bus needs the interrupt logic. So connect it afterwards.
         interrupts.connect(cpu);
-        dma.setBus(bus);
+        dma.setBus(wrapDma(bus));
         clock.setListener(this);
         if (coprocessor != null) {
             coprocessor.connect(new Coprocessor.Host() {

@@ -9,12 +9,14 @@ own detailed guide in `frontend.md`.
 
 Three areas: `jfc.core` is the emulated console and knows nothing about screens or keyboards
 (`CoreBoundaryTest` enforces that); `jfc.ui` presents it to a person; `jfc.tools` holds the
-headless tools. `jfc.Main` only reads the command line and starts one of them.
+headless tools. `jfc.Main` only reads the command line and starts one of them. The visual
+memory debugger (Milestone 9) sits beside them in `jfc.debug` (model, `DebugMain`) and
+`jfc.ui.debug` (its raster UI); the core only offers it `jfc.core.observe`.
 
 | Package         | Hardware / role | Key classes |
 |-----------------|-----------------|-------------|
 | `jfc`           | Command-line entry point | `Main` |
-| `jfc.tools`     | Headless tools: `--info`, `--run`, `--screenshot`, `--record-audio`, `--gamepad-test` | `CartridgeInfo`, `HeadlessRun`, `Screenshot`, `AudioRecording`, `GamepadTest`, `InputScript` |
+| `jfc.tools`     | Headless tools: `--info`, `--run`, `--screenshot`, `--record-audio`, `--gamepad-test`, `--debug-screenshot` | `CartridgeInfo`, `HeadlessRun`, `Screenshot`, `AudioRecording`, `GamepadTest`, `InputScript`, `DebugScreenshot` |
 | `jfc.core.cartridge` | Cartridge: ROM, SRAM, header, LoROM/HiROM mapping | `Cartridge`, `CartridgeHeader`, `HeaderLocator`, `LoRomMapper`, `HiRomMapper`, `Mirroring` |
 | `jfc.core.cpu`       | 65816 core (inside the Ricoh 5A22) | `Cpu`, `Registers`, `StatusFlags`, `EffectiveAddress`, `CpuBus` |
 | `jfc.core.cpu.io`    | The rest of the 5A22: NMI/IRQ, multiply/divide, joypad ports | `InterruptControl`, `ArithmeticUnit`, `JoypadPorts` |
@@ -26,14 +28,17 @@ headless tools. `jfc.Main` only reads the command line and starts one of them.
 | `jfc.core.coprocessor.sa1` | SA-1 | `Sa1` (board: both address maps, registers, interrupts, DMA, bit reader, catch-up), `SuperMmc` (ROM banking), `Sa1Arithmetic` |
 | `jfc.core.coprocessor.superfx` | SuperFX / GSU | `SuperFx` (board: both address maps, registers, catch-up), `Gsu` (the RISC core), `PlotUnit` (PLOT/RPIX), `GsuBus` |
 | `jfc.core.system`    | The console | `Snes` (wiring and frame loop), `MasterClock`, `WorkRam` |
-| `jfc.ui`        | The boundary between console and user interface: runs a console in real time (frame loop, saves, input polling), plus what every window shares | `EmulationSession`, `VideoSink`, `InputSource`, `Frame`, `FrameClock`, `PacingMode`, `PlayOptions`, `Controls` |
+| `jfc.core.observe`   | Debug support: the one hook for watching memory accesses. Each processor gets its bus through `Observable.wrapXxx`, a pass-through unless a debugger installed an `Observer` | `Observable`, `Observer` |
+| `jfc.debug`     | The memory debugger's model: bus wrappers, address decoding per board, per-byte access stamps, PPU/DSP activity worked out from registers; `DebugMain` (a `Main` subclass) | `MemoryObserver`, `AccessRecorder`, `MemorySpace`, `SystemBusMap`, `Sa1Map`, `SuperFxMap`, `VideoActivity`, `SoundActivity`, `DebugMain` |
+| `jfc.ui.debug`  | The memory debugger's raster UI (an ARGB buffer, no toolkit) | `DebugScreen`, `HeatMapView`, `HeatPalette`, `Raster`, `PixelFont` |
+| `jfc.ui`        | The boundary between console and user interface: runs a console in real time (frame loop, saves, input polling), plus what every window shares | `EmulationSession`, `VideoSink`, `InputSource`, `Frame`, `FrameClock`, `PacingMode`, `PlayOptions`, `Controls`, `ToolScreen` (a second window's contents, e.g. the debugger), `ToolRedrawPacer` |
 | `jfc.ui.audio`  | Sound output with dynamic rate control | `AudioOutput`, `AudioResampler` |
 | `jfc.ui.video`  | Turning PPU pixels into a picture: plain RGB, or the NTSC filter | `SnesColor`, `VideoFilter`, `VideoMode` |
 | `jfc.ui.video.ntsc` | Java port of Blargg's `snes_ntsc` (**LGPL 2.1+**, kept separate) | `SnesNtsc`, `NtscSetup` |
 | `jfc.ui.input`  | Gamepad button mapping, shared by every gamepad reader | `GamepadMapping`, `JoystickState` |
 | `jfc.ui.input.winmm` | Windows gamepads through winmm.dll for the Swing window (an `InputSource`; F9 rescans) | `Gamepads`, `WinmmJoysticks` |
-| `jfc.ui.swing`  | The Swing window (a `VideoSink`) and its keyboard; `--swing`, and the fallback | `SwingWindow`, `SwingKeyboard` |
-| `jfc.ui.lwjgl`  | The OpenGL window (GLFW via LWJGL, the default): drawing (NTSC on the GPU), keyboard, gamepads, pacing to the display | `LwjglWindow`, `GlRenderer`, `GlfwKeyboard`, `GlfwGamepads`, `GlfwJoysticks`, `PacingDecision` |
+| `jfc.ui.swing`  | The Swing window (a `VideoSink`) and its keyboard; `--swing`, and the fallback | `SwingWindow`, `SwingKeyboard`, `SwingToolWindow` |
+| `jfc.ui.lwjgl`  | The OpenGL window (GLFW via LWJGL, the default): drawing (NTSC on the GPU), keyboard, gamepads, pacing to the display | `LwjglWindow`, `GlRenderer`, `GlfwKeyboard`, `GlfwGamepads`, `GlfwJoysticks`, `PacingDecision`, `GlfwToolWindow` |
 
 ## Timing model: "the CPU drives everything"
 
@@ -206,6 +211,6 @@ So `InterruptControl` is created first and then `interrupts.connect(cpu)` once t
 ## Planned direction
 
 Milestone 10 is done; its optional extras (shadow mask, 4:3 sharp pixels, NTSC settings) are
-listed in `frontend.md`. Next are Milestone 9 (visual memory debugger, `m9-debugger-plan.md`) and Milestone
+listed in `frontend.md`. Next are the rest of Milestone 9 (visual memory debugger, `m9-debugger-plan.md`; 9a, the heat map, is built) and Milestone
 11 (enhanced audio, `m11-audio-plan.md`). In Milestone 11, an enhanced renderer runs alongside
 the unchanged `Dsp`, which stays the only audio state games can see. The core (`jfc.core`) must not depend on Swing or LWJGL (`CoreBoundaryTest`).

@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 2026-11-17. Milestone 10 is merged into `main` after the user's play-tests (the
+Last updated: 2026-11-17 (Milestone 9a built: the memory heat map). Milestone 10 is merged into `main` after the user's play-tests (the
 frontend code is explained in `frontend.md`), and its `m10-video` worktree and branch are
 removed. Milestone 11 (enhanced audio) was added as a plan. Milestone 9 was re-planned as an
 ICU64-style visual memory debugger (`m9-debugger-plan.md`).
@@ -20,7 +20,7 @@ ICU64-style visual memory debugger (`m9-debugger-plan.md`).
 | - | BG line numbering (+1) and render at dot 22 (Super Metroid HUD) | see git log | done |
 | 8 | Coprocessors: SuperFX (Star Fox, Yoshi's Island) and SA-1 (Super Mario RPG) | see git log | done; the user played all three ("pretty much perfectly") |
 | - | Offset-per-tile in modes 2 and 4 (Star Fox horizon); GSU background ROM/RAM buffers | see git log | done |
-| 9 | Visual memory debugger, ICU64-style: heat map, inspect and edit RAM, tile and sprite viewer, maybe a value scanner (plan: `m9-debugger-plan.md`) | - | planned |
+| 9 | Visual memory debugger, ICU64-style: heat map, inspect and edit RAM, tile and sprite viewer, maybe a value scanner (plan: `m9-debugger-plan.md`) | - | 9a (heat map) built and play-tested by the user (`--debug`); maximized-window slowdown fixed, to re-check; 9b-9d planned |
 | 10 | Move video and input to LWJGL; CRT/NTSC shaders (plan: `m10-shader-plan.md`) | see git log | done, merged 2026-11-15: 10a (frontend boundary, 15-bit frame buffer), 10b (Java NTSC filter), 10c (package layout, OpenGL window, frame pacing), 10d (NTSC on the GPU), 10f (GLFW gamepads), and from 10e the beam-profile scanlines (the user likes them). Optional extras (shadow mask, 4:3 sharp pixels, NTSC settings) are listed in `frontend.md`; curvature was declined |
 | 11 | Enhanced audio, SNESamp-style: higher output rate, sinc/cubic interpolation, per-voice anti-aliasing, float mixing, stereo controls, Hardware/Quality presets (plan: `m11-audio-plan.md`) | - | planned; open decisions in the plan |
 
@@ -156,3 +156,11 @@ subclass of `Main`) and `jfc.ui.debug` (raster UI in its own window). The core o
 and a few read-only getters. Sub-milestones: 9a heat map, 9b inspect and edit (work RAM and
 cartridge RAM only), 9c tile and sprite viewer, 9d (maybe) value scanner. It replaces the older
 plan (disassemblers, tracing, breakpoints, Swing window).
+
+**9a is built** (2026-11-17): `java -jar target/jfc-0.1.0-SNAPSHOT.jar --debug <rom>` opens the
+heat map beside the game (F12 toggles it); `--debug-screenshot` renders it headless. Checked
+with headless PNGs of SMW, Star Fox and Super Mario RPG and short runs of both windows. The
+user's first play-test: it works, but the game dropped frames in F11 fullscreen with the
+debugger maximized on the other monitor; fixed (a pixel buffer object upload, ~8.4 to ~0.7 ms;
+see `frontend.md`), not yet re-checked by the user. What was built, and what's ready for 9b, is at the end of
+`m9-debugger-plan.md`.

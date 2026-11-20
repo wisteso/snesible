@@ -50,11 +50,13 @@ failure details.
 | `GlfwGamepadsTest` | standard-layout gamepads map by position; triggers, stick, hat angles |
 | `PacingDecisionTest` | which pacing the OpenGL window picks for 60, 59.94, 120, 144 Hz, PAL, broken vsync |
 | `AudioResamplerTest` | dynamic rate control: exact at ratio 1, the right length at 1.005, no clicks between chunks |
-| `CoreBoundaryTest` | `jfc.core` imports no Swing, AWT, LWJGL, `jfc.ui` or `jfc.tools` |
+| `CoreBoundaryTest` | `jfc.core` imports no Swing, AWT, LWJGL, `jfc.ui`, `jfc.tools` or `jfc.debug` |
+| `ObservableTest` | with no observer installed, every `Observable.wrapXxx` returns its argument |
+| `MemoryObserverTest` | the memory debugger's recording: fetch vs read, DMA through the VRAM port, APU RAM under the registers, watching changes nothing |
 | `VideoFilterTest` | sharp-pixel conversion; NTSC filter: size, flat colors, composite vs S-Video artifacts, burst phase per line and frame, scanlines, brightness |
 | `ArithmeticUnitTest`, `JoypadPortsTest`, `GamepadMappingTest` | small units |
 
-The total is about 927 tests, taking about 10 s.
+The total is about 932 tests, taking about 10 s.
 
 ## Headless tools (essential for checking work without seeing or hearing it)
 
@@ -69,8 +71,14 @@ J="$JAVA_HOME/bin/java"
 "$J" -jar target/jfc-0.1.0-SNAPSHOT.jar --gamepad-test --swing          # as the Swing window reads them (winmm)
 "$J" -jar target/jfc-0.1.0-SNAPSHOT.jar "roms/X.sfc" --stats            # the OpenGL window, timing each second
 "$J" -jar target/jfc-0.1.0-SNAPSHOT.jar "roms/X.sfc" --swing            # the Swing window
+"$J" -jar target/jfc-0.1.0-SNAPSHOT.jar --debug "roms/X.sfc"            # with the memory debugger window (F12)
+"$J" -cp target/classes jfc.Main --debug-screenshot "roms/X.sfc" 600 out.png --space VRAM START@200
+                                                                        # the debugger's heat map as a PNG
 ```
 
+- `--debug-screenshot` runs the game with the memory debugger attached and saves what its
+  window would show for one memory (`--space` WRAM, ROM, Cart RAM, I-RAM, VRAM, CGRAM, OAM,
+  ARAM; `--size 1024x800`). It also prints the warmed-up drawing time.
 - Read screenshot PNGs with the Read tool to check rendering. NTSC screenshots are 602 x 448;
   crop and enlarge a region (a tiny scratch Java program) to see the artifacts.
 - To capture the real window, `CopyFromScreen` returns a blank white client area (Java2D

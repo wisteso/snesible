@@ -1,5 +1,7 @@
 package jfc.core.coprocessor.sa1;
 
+import static jfc.core.observe.Observable.wrapSa1;
+
 import java.util.Arrays;
 import jfc.core.cartridge.Cartridge;
 import jfc.core.cartridge.Mirroring;
@@ -75,7 +77,7 @@ public final class Sa1 implements Coprocessor {
     private final SuperMmc mmc;
     private final Sa1Arithmetic math = new Sa1Arithmetic();
     private final Sa1Side sa1Bus = new Sa1Side();
-    private final Cpu cpu = new Cpu(sa1Bus);
+    private final Cpu cpu = new Cpu(wrapSa1(sa1Bus));
 
     private Host host;
     /** The master-clock time the SA-1 has run up to. */
@@ -187,6 +189,18 @@ public final class Sa1 implements Coprocessor {
     /** The SA-1 CPU, for debugging tools. */
     public Cpu cpu() {
         return cpu;
+    }
+
+    /**
+     * The SA-1's 2 KiB of on-chip I-RAM itself (not a copy), for memory viewers. Unlike
+     * BW-RAM it isn't part of the cartridge's RAM ({@link Cartridge#ramBytes()}), so this is
+     * the only way to see it from outside. Changing a byte here changes what both CPUs read.
+     *
+     * <p><b>Debug support:</b> not needed to emulate the console; it exists for the visual
+     * memory debugger (viewing and editing I-RAM) and other tools.
+     */
+    public byte[] iramBytes() {
+        return iram;
     }
 
     // =============================================================================================

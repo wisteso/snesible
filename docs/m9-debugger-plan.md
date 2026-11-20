@@ -1,6 +1,7 @@
 # Milestone 9 plan: visual memory debugger (ICU64-style)
 
-Status: planned (agreed with the user 2026-11-17). Nothing here is built yet. It replaces the
+Status: agreed with the user 2026-11-17. **9a (heat map) is built** (see "9a as built" at the
+end); 9b-9d are planned. It replaces the
 older M9 plan (disassembler, tracing, breakpoints, event viewer); see "Dropped from the
 earlier plan" at the end.
 
@@ -248,6 +249,7 @@ sample isn't known: the whole sample is marked while it plays.
 | `Ppu`: VRAM write address (after remap), CGRAM address, OAM address | read-only getters |
 | `WorkRam`: port address | read-only getter |
 | `Sa1`: I-RAM bytes (the user agreed, 2026-11-17) | read-only getter |
+| `Apu`: `ramBytes()` and `peekDspRegister(int)` (added while building 9a) | read-only getters |
 
 Outside the core: `Main` becomes an instance class with `createSnes` (above), and
 `LwjglWindow` / `EmulationSession` get the after-each-frame callback.
@@ -340,3 +342,44 @@ breakpoints and watchpoints, a beam-position event viewer, DSP voice panel with 
 superseded. The user ruled out disassemblers and instruction logging for this debugger. The
 existing hooks it relied on (`Cpu.setInstructionListener`, `SnesBus.setRegisterWriteListener`)
 stay in the core, unused by this plan.
+
+## 9a as built (2026-11-17)
+
+What differs from, or adds to, the plan above:
+- **Two more core getters**, both "Debug support": `Apu.ramBytes()` (sound RAM, for the
+  ARAM view and the DSP activity) and `Apu.peekDspRegister(int)` (DSP registers without side
+  effects). The DSP's own ENVX values say which voices are audible, which a copy of the
+  register writes couldn't, so the planned DSP register copy wasn't needed.
+- **Recording** (`jfc.debug`): `MemoryObserver` wraps the buses; `attach` builds an
+  `AccessRecorder` (one `MemorySpace` per memory, frame stamps per byte per `Access` kind,
+  arrays allocated on first use) and the address maps: `SystemBusMap` (S-CPU and DMA, ports
+  followed through the PPU/WRAM getters, PPU register writes copied into `VideoRegisters`),
+  `PlainCartridgeMap` (the public mappers), `Sa1Map` (Super MMC and BW-RAM registers copied
+  from both CPUs' writes, bitmap view), `SuperFxMap`, `SpcMap` (skips $F0-$FF reads and the
+  boot ROM while it's mapped). Accesses before `attach` aren't recorded.
+- **Access kinds and colours:** read green, write red, execute blue, DMA magenta, PPU/DSP
+  (derived) grey, added like light (code = cyan, read+written data = yellow). Full brightness
+  fades over 90 frames to a dim glow that stays.
+- **Derived activity:** `VideoActivity` (visible tilemap entries, their tiles and palettes;
+  all of OAM; on-screen sprites' tiles and palettes; Mode 7's 32 KiB; the backdrop) and
+  `SoundActivity` (audible voices' directory entries and whole samples; the echo buffer).
+- **UI** (`jfc.ui.debug.DebugScreen`): tabs per memory, the heat map (`HeatMapView`: rows
+  of a power of two that make it roughly square, min 64; small tables 32), a status line with
+  the hovered byte's value and the age of each kind of access, and a legend. Mouse wheel
+  zooms around the cursor (down to fitting the whole memory, up to 96 px cells); left drag
+  pans; keys 1-9 pick a tab. The right button and `keyPressed` are free for 9b.
+- **Frontend glue** (outside the core): `jfc.ui.ToolScreen` (toolkit-free contents of a second
+  window), `ToolRedrawPacer`, `EmulationSession.setAfterFrame`, `Main.createToolScreen`,
+  `GlfwToolWindow`, `SwingToolWindow`, and `--debug` in `Main` (hands over to `DebugMain` so
+  `java -jar` works). Details in `frontend.md`.
+- **Checking:** `--debug-screenshot` (`jfc.tools.DebugScreenshot`) and `MemoryObserverTest`.
+  Checked on Super Mario World (all spaces), Star Fox (GSU writes and DMA in cartridge RAM)
+  and Super Mario RPG (SA-1 I-RAM, 4 MiB ROM), plus short window runs of both frontends.
+- **First play-test (2026-11-17):** the game dropped frames in F11 fullscreen with the debugger
+  maximized on the other monitor. Cause: a synchronous 14 MB `glTexImage2D` upload per frame
+  (~8.4 ms) that the redraw pacer didn't count. Fixed with a pixel buffer object upload
+  (~0.7 ms) and timing the whole redraw (`frontend.md`, debugger window).
+
+**Ready for 9b:** `MemorySpace.editable()` marks WRAM and cartridge RAM (and I-RAM);
+`HeatMapView` knows the cell size (`zoom()`) for drawing values; the right mouse button and
+`ToolScreen.keyTyped`/`keyPressed` reach `DebugScreen` from both frontends.

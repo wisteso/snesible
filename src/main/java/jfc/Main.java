@@ -6,8 +6,10 @@ import java.util.Arrays;
 import java.util.List;
 import jfc.core.cartridge.Cartridge;
 import jfc.core.system.Snes;
+import jfc.debug.DebugMain;
 import jfc.tools.AudioRecording;
 import jfc.tools.CartridgeInfo;
+import jfc.tools.DebugScreenshot;
 import jfc.tools.GamepadTest;
 import jfc.tools.HeadlessRun;
 import jfc.tools.Screenshot;
@@ -15,6 +17,7 @@ import jfc.ui.Controls;
 import jfc.ui.InputSource;
 import jfc.ui.PacingMode;
 import jfc.ui.PlayOptions;
+import jfc.ui.ToolScreen;
 import jfc.ui.input.GamepadMapping;
 import jfc.ui.input.winmm.Gamepads;
 import jfc.ui.lwjgl.LwjglWindow;
@@ -25,18 +28,34 @@ import jfc.ui.video.VideoMode;
  * Command-line entry point: plays a game in a window, or runs one of the headless tools in
  * {@link jfc.tools}. The emulated console itself is in {@link jfc.core}, and everything that
  * presents it to a person (windows, sound, input, picture filters) in {@link jfc.ui}.
+ *
+ * <p>It's an instance class so that another entry point can extend it and change one thing:
+ * how the console is built ({@link #createSnes}). The visual memory debugger's
+ * {@code jfc.debug.DebugMain} does that to install its memory observer, and reuses everything
+ * else here (options, the choice of window, gamepads) unchanged.
  */
-public final class Main {
+public class Main {
 
-    private Main() {
+    protected Main() {
     }
 
     /** Optional gamepad button mapping, looked for in the working directory. */
     private static final Path GAMEPAD_MAPPING_FILE = Path.of("gamepad.properties");
 
     public static void main(String[] args) throws IOException, InterruptedException {
+        new Main().run(args);
+    }
+
+    /** Parses the command line and plays a game or runs a headless tool. */
+    protected void run(String[] args) throws IOException, InterruptedException {
         if (args.length >= 1 && !args[0].startsWith("--")) {
             play(Path.of(args[0]), Arrays.copyOfRange(args, 1, args.length));
+            return;
+        }
+        if (args.length >= 2 && args[0].equals("--debug")) {
+            // Debug support: the same as running jfc.debug.DebugMain, but through the jar's
+            // manifest (class path and native access), so "java -jar" works.
+            DebugMain.main(Arrays.copyOfRange(args, 1, args.length));
             return;
         }
         if (args.length >= 1 && args[0].equals("--gamepad-test")) {
@@ -66,6 +85,11 @@ public final class Main {
             Screenshot.take(Path.of(args[1]), Integer.parseInt(args[2]), Path.of(args[3]), presses);
             return;
         }
+        if (args.length >= 4 && args[0].equals("--debug-screenshot")) {
+            String[] rest = Arrays.copyOfRange(args, 4, args.length);
+            DebugScreenshot.take(Path.of(args[1]), Integer.parseInt(args[2]), Path.of(args[3]), rest);
+            return;
+        }
         System.err.println("""
                 Usage:
                   jfc <rom-file> [options]       Play a game in a window. Options:
@@ -77,6 +101,9 @@ public final class Main {
                     --refresh <hz>                 refresh rate to ask for in exclusive
                                                    fullscreen (Alt+Enter)
                     --stats                        print timing and audio statistics each second
+                  jfc --debug <rom-file> [options]
+                                                 Play with the memory debugger in a second
+                                                 window (F12 shows or hides it)
                   jfc --gamepad-test [--swing]   Show gamepad button numbers (for gamepad.properties),
                                                  read as the OpenGL window does (GLFW) or, with
                                                  --swing, as the Swing window does (winmm)
@@ -88,7 +115,11 @@ public final class Main {
                                                  Run headless and save the last frame as a PNG,
                                                  pressing buttons (e.g. START@200) on the way
                   jfc --record-audio <rom-file> <frames> <out.wav> [BUTTON@frame ...]
-                                                 Run headless and save the sound as a WAV file""");
+                                                 Run headless and save the sound as a WAV file
+                  jfc --debug-screenshot <rom-file> <frames> <out.png> [--space <name>]
+                                                 [--size <w>x<h>] [BUTTON@frame ...]
+                                                 Run headless with the memory debugger and save
+                                                 its heat map of one memory (default WRAM)""");
         System.exit(1);
     }
 
@@ -96,7 +127,7 @@ public final class Main {
      * Plays a game in a window: the OpenGL window by default, or Swing with {@code --swing} (and
      * as a fallback when OpenGL 3.3 or LWJGL isn't available).
      */
-    private static void play(Path romFile, String[] options) throws IOException {
+    private void play(Path romFile, String[] options) throws IOException {
         VideoMode videoMode = VideoMode.SHARP;
         boolean scanlines = false;
         boolean swing = false;
@@ -134,7 +165,8 @@ public final class Main {
                         + "); using the Swing window instead.");
             }
             if (window != null) {
-                window.play(new Snes(cart), saveFile, mapping); // gamepads through GLFW; returns when closed
+                Snes snes = createSnes(cart);
+                window.play(snes, saveFile, mapping, createToolScreen(snes)); // returns when closed
                 return;
             }
         }
@@ -142,6 +174,29 @@ public final class Main {
         Gamepads gamepads = Gamepads.open(mapping).orElse(null);
         List<InputSource> gamepadInputs = gamepads == null ? List.of() : List.of(gamepads);
         Runnable rescan = gamepads == null ? null : gamepads::requestRescan;
-        SwingWindow.play(new Snes(cart), title, saveFile, gamepadInputs, rescan, playOptions);
+        Snes snes = createSnes(cart);
+        SwingWindow.play(snes, title, saveFile, gamepadInputs, rescan, playOptions, createToolScreen(snes));
+    }
+
+    /**
+     * Builds the console for a game played in a window. A subclass can override this to
+     * return an instrumented console (see the class comment). The headless tools build their
+     * own and don't go through here.
+     *
+     * <p><b>Debug support:</b> the override point exists for {@code jfc.debug.DebugMain};
+     * playing a game doesn't need it.
+     */
+    protected Snes createSnes(Cartridge cart) {
+        return new Snes(cart);
+    }
+
+    /**
+     * The screen for a second window beside the game, or null for none (the default). Called
+     * right after {@link #createSnes}, with its result.
+     *
+     * <p><b>Debug support:</b> {@code jfc.debug.DebugMain} returns the memory debugger here.
+     */
+    protected ToolScreen createToolScreen(Snes snes) {
+        return null;
     }
 }
