@@ -382,7 +382,8 @@ with scanlines on and off, over frames 1-3 (all burst phases).
   `NtscInput.ENTRY_FOR_PIXEL`, a 2^19 table built lazily on first NTSC use.
 - `SnesNtsc`: a port of `snes_ntsc` 0.2.2 that keeps the C code's `float` steps and
   packed-integer tricks, so the output matches Snes9x. **The package is LGPL 2.1+** (header
-  on each file), so don't put other code in it. The hi-res (512-pixel) blitter is **not
+  on each file; the license's text is `LICENSE-LGPL-2.1.txt` at the root, copied into the
+  jar's `META-INF` by the pom, beside the MIT `LICENSE`), so don't put other code in it. The hi-res (512-pixel) blitter is **not
   ported**.
 - `NtscSetup` presets follow Snes9x's options. RF is composite with `mergeFields = false`:
   visible dot crawl.

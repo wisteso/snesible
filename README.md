@@ -132,4 +132,7 @@ gamepads through GLFW, and CRT-style scanlines. A shadow mask may follow someday
 ## Licensing note
 
 The `snesible.ui.video.ntsc` package is a port of Shay Green's (Blargg's) `snes_ntsc` library and is
-licensed under the GNU Lesser General Public License 2.1 or later, as the original is.
+licensed under the GNU Lesser General Public License 2.1 or later, as the original is. So is
+the OpenGL shader ported from it, `src/main/resources/snesible/ui/lwjgl/shaders/snes-ntsc.frag`.
+The license's full text is in [LICENSE-LGPL-2.1.txt](LICENSE-LGPL-2.1.txt); everything else is
+under the MIT license in [LICENSE](LICENSE). The built jar carries both texts in its `META-INF`.
