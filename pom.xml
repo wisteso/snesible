@@ -4,10 +4,10 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>jfc</groupId>
-    <artifactId>jfc</artifactId>
+    <groupId>snesible</groupId>
+    <artifactId>snesible</artifactId>
     <version>0.1.0-SNAPSHOT</version>
-    <name>JFC</name>
+    <name>Snesible</name>
     <description>An educational Super Nintendo / Super Famicom emulator</description>
 
     <properties>
@@ -33,8 +33,8 @@
 
     <dependencies>
         <!--
-          LWJGL: the OpenGL window (GLFW) and graphics (OpenGL) for jfc.ui.lwjgl. The only runtime
-          dependency, and only the user interface uses it; jfc.core needs nothing but the JDK.
+          LWJGL: the OpenGL window (GLFW) and graphics (OpenGL) for snesible.ui.lwjgl. The only runtime
+          dependency, and only the user interface uses it; snesible.core needs nothing but the JDK.
           Each module has a Java jar and a jar of native libraries for the platform.
         -->
         <dependency>
@@ -125,7 +125,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>jfc.Main</mainClass>
+                            <mainClass>snesible.Main</mainClass>
                             <!-- Lists lib/*.jar in the manifest, so java -jar finds LWJGL -->
                             <addClasspath>true</addClasspath>
                             <classpathPrefix>lib/</classpathPrefix>

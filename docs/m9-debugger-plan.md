@@ -37,10 +37,10 @@ versions.
    returns its argument, so a normal run pays nothing per memory access.
 3. **Static import** of the methods at the call sites, so they read `new Cpu(wrapCpu(bus))`.
 4. **Two packages:**
-   - `jfc.debug`: the model (bus wrappers, access recorder, memory spaces, PPU/DSP activity
+   - `snesible.debug`: the model (bus wrappers, access recorder, memory spaces, PPU/DSP activity
      worked out from register values, editing, the scanner, tile decoding) and the entry
      point `DebugMain` (see "Entry point" below). The model classes are tested headlessly.
-   - `jfc.ui.debug`: the raster UI that draws the model, plus its input handling.
+   - `snesible.ui.debug`: the raster UI that draws the model, plus its input handling.
    - The two packages may depend on each other (`DebugMain` opens the debug window, the
      window draws the model). The user accepted that: unlike the core, the debug code has
      little value apart from its UI. If a headless use appears, a `HeadlessDebugMain` can
@@ -68,7 +68,7 @@ static methods, and it builds the console inline (`window.play(new Snes(cart), .
 becomes an instance class with one overridable factory method:
 
 ```java
-// jfc.Main
+// snesible.Main
 public class Main {
     public static void main(String[] args) throws Exception {
         new Main().run(args);
@@ -82,7 +82,7 @@ public class Main {
     }
 }
 
-// jfc.debug.DebugMain
+// snesible.debug.DebugMain
 public final class DebugMain extends Main {
     public static void main(String[] args) throws Exception {
         new DebugMain().run(args);                  // same options, same window choice
@@ -94,7 +94,7 @@ public final class DebugMain extends Main {
         Observable.install(observer);
         Snes snes = new Snes(cart);                 // the wrappers are created in here
         observer.attach(snes);                      // ...and get their program counters here
-        DebugWindow.open(observer);                 // jfc.ui.debug
+        DebugWindow.open(observer);                 // snesible.ui.debug
         return snes;
     }
 }
@@ -102,7 +102,7 @@ public final class DebugMain extends Main {
 
 - So `DebugMain` duplicates nothing: option parsing, the OpenGL-to-Swing fallback and the
   gamepad setup stay in `Main`.
-- Run it with `java -cp target/jfc.jar jfc.debug.DebugMain game.sfc` (the manifest's
+- Run it with `java -cp target/snesible.jar snesible.debug.DebugMain game.sfc` (the manifest's
   `Class-Path` still brings in `target/lib`), or add a `--debug` option to `Main` that only
   hands off to `DebugMain`.
 - Only `DebugMain` installs the observer, and it always calls `attach`, so "installed but
@@ -114,12 +114,12 @@ public final class DebugMain extends Main {
   runs the game. `LwjglWindow.loop` and `EmulationSession` get a small "after each frame"
   callback that `DebugWindow.open` registers with. `createSnes` runs before the game window
   exists, so the exact order (register now, start calling once the window runs) is settled
-  when that code is written. These are `jfc.ui` changes, not core changes.
+  when that code is written. These are `snesible.ui` changes, not core changes.
 
 ### `Observable` (core) and `Observer` (debug)
 
 ```java
-package jfc.core.observe;
+package snesible.core.observe;
 
 /** Pass-through unless a debugger installed an observer before the Snes was built. */
 public final class Observable {
@@ -137,7 +137,7 @@ public final class Observable {
 }
 ```
 
-- `Observer` is an interface in core with the same methods. `jfc.debug` implements it and
+- `Observer` is an interface in core with the same methods. `snesible.debug` implements it and
   calls `Observable.install` before constructing `Snes`.
 - The observer is global state. That's acceptable: a process runs one emulator. Tests that
   install one must uninstall it afterwards (`install(null)`).
@@ -155,7 +155,7 @@ public final class Observable {
 `SnesBus` implements both `CpuBus` and `DmaController.Bus`. Separate method names pick the
 interface, so no cast is needed.
 
-`GsuBus` becomes public (it's package-private in `jfc.core.coprocessor.superfx` today; the
+`GsuBus` becomes public (it's package-private in `snesible.core.coprocessor.superfx` today; the
 user agreed). The GSU's instruction fetches aren't marked as executed: most come from its
 512-byte code cache and never reach the bus, and its `R15`/`PBR` are package-private. Its
 code bytes show as plain reads when the cache loads them.
@@ -243,7 +243,7 @@ sample isn't known: the whole sample is marked while it plays.
 
 | Change | Kind |
 |---|---|
-| `jfc.core.observe`: `Observable`, `Observer` | new, small |
+| `snesible.core.observe`: `Observable`, `Observer` | new, small |
 | 5 `wrapXxx(...)` call sites (`Snes` ×2, `Apu`, `Sa1`, `SuperFx`) | edited lines |
 | `LoRomMapper`, `HiRomMapper`, `GsuBus` made public | visibility only |
 | `Ppu`: VRAM write address (after remap), CGRAM address, OAM address | read-only getters |
@@ -254,7 +254,7 @@ sample isn't known: the whole sample is marked while it plays.
 Outside the core: `Main` becomes an instance class with `createSnes` (above), and
 `LwjglWindow` / `EmulationSession` get the after-each-frame callback.
 
-## The access recorder (`jfc.debug`)
+## The access recorder (`snesible.debug`)
 
 - One **memory space** per memory: WRAM (128 KB), ROM, cartridge RAM, SA-1 I-RAM, VRAM
   (64 KB), CGRAM (512 B), OAM (544 B), ARAM (64 KB). Each has a name, size and the access
@@ -267,7 +267,7 @@ Outside the core: `Main` becomes an instance class with `createSnes` (above), an
     turns out too much.
 - The recorder is written only on the emulation thread, inside `runFrame()`.
 
-## The raster UI (`jfc.ui.debug`)
+## The raster UI (`snesible.ui.debug`)
 
 - **Output:** `int[]` ARGB, resized with its window. The OpenGL frontend uploads it as a
   texture and draws it with a plain pass-through shader (no NTSC, no scanlines). The Swing
@@ -284,7 +284,7 @@ Outside the core: `Main` becomes an instance class with `createSnes` (above), an
 - **Widgets, only as needed:** toggle buttons, a hex input field, a scrollable list (9d).
 - **Mouse:** the wheel zooms, anchored at the cursor; dragging with the left button pans; the
   right button edits the value under the cursor (9b). Each button has one job.
-- **Headless check:** a `jfc.tools` mode (installs the observer and calls `attach` like
+- **Headless check:** a `snesible.tools` mode (installs the observer and calls `attach` like
   `DebugMain`) such as `--debug-screenshot <rom> <frames> <out.png>`
   runs the game with the observer installed and writes the debugger view to a PNG, so every
   milestone can be verified with evidence.
@@ -292,15 +292,15 @@ Outside the core: `Main` becomes an instance class with `createSnes` (above), an
 ## Sub-milestones (one reviewable commit each, or more)
 
 ### 9a. Heat map
-1. `jfc.core.observe` and the five call sites; a test that with no observer installed each `wrapXxx`
+1. `snesible.core.observe` and the five call sites; a test that with no observer installed each `wrapXxx`
    returns the same object.
-2. `jfc.debug`: wrappers, `attach`, address decoding, recorder, memory spaces. Tests: a tiny
+2. `snesible.debug`: wrappers, `attach`, address decoding, recorder, memory spaces. Tests: a tiny
    hand-assembled program in WRAM shows its bytes as executed and its data as read/written;
    a DMA to VRAM is tagged DMA and lands at the right VRAM addresses.
 3. The read-only getters for indirect writes, and the derived PPU/DSP activity.
 4. `--debug-screenshot` drawing every space as a grid of cells (one pixel or more per byte).
 5. `Main` refactor (`createSnes`), `DebugMain`, and the after-each-frame callback.
-6. `jfc.ui.debug`: the raster window in both frontends, wheel zoom and drag-pan, a space
+6. `snesible.ui.debug`: the raster window in both frontends, wheel zoom and drag-pan, a space
    selector, a colour legend, and the exclusive-fullscreen hiding.
 
 ### 9b. Inspect and edit
@@ -321,7 +321,7 @@ Outside the core: `Main` becomes an instance class with `createSnes` (above), an
   their position, size, tile, palette, priority and flips, and a preview of each.
 - Uses `Ppu.peekVram/peekCgram/peekOam` (side-effect-free) and the decoding code the derived
   PPU activity already needs. The model hands out BGR15 colours; converting to RGB with
-  `jfc.ui.video.SnesColor` happens where it's drawn, in `jfc.ui.debug`. Cross-highlight with the heat map (hover a tile → its VRAM
+  `snesible.ui.video.SnesColor` happens where it's drawn, in `snesible.ui.debug`. Cross-highlight with the heat map (hover a tile → its VRAM
   bytes).
 - How much it should differ from ICU64's C64 graphics map is decided when 9c starts.
 
@@ -350,7 +350,7 @@ What differs from, or adds to, the plan above:
   ARAM view and the DSP activity) and `Apu.peekDspRegister(int)` (DSP registers without side
   effects). The DSP's own ENVX values say which voices are audible, which a copy of the
   register writes couldn't, so the planned DSP register copy wasn't needed.
-- **Recording** (`jfc.debug`): `MemoryObserver` wraps the buses; `attach` builds an
+- **Recording** (`snesible.debug`): `MemoryObserver` wraps the buses; `attach` builds an
   `AccessRecorder` (one `MemorySpace` per memory, frame stamps per byte per `Access` kind,
   arrays allocated on first use) and the address maps: `SystemBusMap` (S-CPU and DMA, ports
   followed through the PPU/WRAM getters, PPU register writes copied into `VideoRegisters`),
@@ -363,16 +363,16 @@ What differs from, or adds to, the plan above:
 - **Derived activity:** `VideoActivity` (visible tilemap entries, their tiles and palettes;
   all of OAM; on-screen sprites' tiles and palettes; Mode 7's 32 KiB; the backdrop) and
   `SoundActivity` (audible voices' directory entries and whole samples; the echo buffer).
-- **UI** (`jfc.ui.debug.DebugScreen`): tabs per memory, the heat map (`HeatMapView`: rows
+- **UI** (`snesible.ui.debug.DebugScreen`): tabs per memory, the heat map (`HeatMapView`: rows
   of a power of two that make it roughly square, min 64; small tables 32), a status line with
   the hovered byte's value and the age of each kind of access, and a legend. Mouse wheel
   zooms around the cursor (down to fitting the whole memory, up to 96 px cells); left drag
   pans; keys 1-9 pick a tab. The right button and `keyPressed` are free for 9b.
-- **Frontend glue** (outside the core): `jfc.ui.ToolScreen` (toolkit-free contents of a second
+- **Frontend glue** (outside the core): `snesible.ui.ToolScreen` (toolkit-free contents of a second
   window), `ToolRedrawPacer`, `EmulationSession.setAfterFrame`, `Main.createToolScreen`,
   `GlfwToolWindow`, `SwingToolWindow`, and `--debug` in `Main` (hands over to `DebugMain` so
   `java -jar` works). Details in `frontend.md`.
-- **Checking:** `--debug-screenshot` (`jfc.tools.DebugScreenshot`) and `MemoryObserverTest`.
+- **Checking:** `--debug-screenshot` (`snesible.tools.DebugScreenshot`) and `MemoryObserverTest`.
   Checked on Super Mario World (all spaces), Star Fox (GSU writes and DMA in cartridge RAM)
   and Super Mario RPG (SA-1 I-RAM, 4 MiB ROM), plus short window runs of both frontends.
 - **First play-test (2026-11-17):** the game dropped frames in F11 fullscreen with the debugger

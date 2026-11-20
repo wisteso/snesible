@@ -12,7 +12,7 @@
 export JAVA_HOME="/c/Program Files/Eclipse Adoptium/jdk-25.0.5.8-hotspot"
 /c/dev/tools/apache-maven-3.9.6/bin/mvn -B package            # build + all default tests
 /c/dev/tools/apache-maven-3.9.6/bin/mvn -B test -Dtest=RendererTest
-/c/dev/tools/apache-maven-3.9.6/bin/mvn -B test -Dtest=CpuSingleStepTest -Djfc.cpuTests=all
+/c/dev/tools/apache-maven-3.9.6/bin/mvn -B test -Dtest=CpuSingleStepTest -Dsnesible.cpuTests=all
 ```
 
 Surefire summaries hide dynamic-test names; read `target/surefire-reports/<class>.txt` for
@@ -50,7 +50,7 @@ failure details.
 | `GlfwGamepadsTest` | standard-layout gamepads map by position; triggers, stick, hat angles |
 | `PacingDecisionTest` | which pacing the OpenGL window picks for 60, 59.94, 120, 144 Hz, PAL, broken vsync |
 | `AudioResamplerTest` | dynamic rate control: exact at ratio 1, the right length at 1.005, no clicks between chunks |
-| `CoreBoundaryTest` | `jfc.core` imports no Swing, AWT, LWJGL, `jfc.ui`, `jfc.tools` or `jfc.debug` |
+| `CoreBoundaryTest` | `snesible.core` imports no Swing, AWT, LWJGL, `snesible.ui`, `snesible.tools` or `snesible.debug` |
 | `ObservableTest` | with no observer installed, every `Observable.wrapXxx` returns its argument |
 | `MemoryObserverTest` | the memory debugger's recording: fetch vs read, DMA through the VRAM port, APU RAM under the registers, watching changes nothing |
 | `VideoFilterTest` | sharp-pixel conversion; NTSC filter: size, flat colors, composite vs S-Video artifacts, burst phase per line and frame, scanlines, brightness |
@@ -62,17 +62,17 @@ The total is about 932 tests, taking about 10 s.
 
 ```bash
 J="$JAVA_HOME/bin/java"
-"$J" -cp target/classes jfc.Main --info roms/*                        # header dump
-"$J" -cp target/classes jfc.Main --run "roms/X.sfc" 600 START@320       # where the CPU spends time, BG mode
-"$J" -cp target/classes jfc.Main --screenshot "roms/X.sfc" 700 out.png START@320 A@600
-"$J" -cp target/classes jfc.Main --screenshot "roms/X.sfc" 700 out.png --video composite  # NTSC filter
-"$J" -cp target/classes jfc.Main --record-audio "roms/X.sfc" 1800 out.wav START@1300
-"$J" -jar target/jfc-0.1.0-SNAPSHOT.jar --gamepad-test                  # as the OpenGL window reads pads (GLFW); needs the user to press buttons
-"$J" -jar target/jfc-0.1.0-SNAPSHOT.jar --gamepad-test --swing          # as the Swing window reads them (winmm)
-"$J" -jar target/jfc-0.1.0-SNAPSHOT.jar "roms/X.sfc" --stats            # the OpenGL window, timing each second
-"$J" -jar target/jfc-0.1.0-SNAPSHOT.jar "roms/X.sfc" --swing            # the Swing window
-"$J" -jar target/jfc-0.1.0-SNAPSHOT.jar --debug "roms/X.sfc"            # with the memory debugger window (F12)
-"$J" -cp target/classes jfc.Main --debug-screenshot "roms/X.sfc" 600 out.png --space VRAM START@200
+"$J" -cp target/classes snesible.Main --info roms/*                        # header dump
+"$J" -cp target/classes snesible.Main --run "roms/X.sfc" 600 START@320       # where the CPU spends time, BG mode
+"$J" -cp target/classes snesible.Main --screenshot "roms/X.sfc" 700 out.png START@320 A@600
+"$J" -cp target/classes snesible.Main --screenshot "roms/X.sfc" 700 out.png --video composite  # NTSC filter
+"$J" -cp target/classes snesible.Main --record-audio "roms/X.sfc" 1800 out.wav START@1300
+"$J" -jar target/snesible-0.1.0-SNAPSHOT.jar --gamepad-test                  # as the OpenGL window reads pads (GLFW); needs the user to press buttons
+"$J" -jar target/snesible-0.1.0-SNAPSHOT.jar --gamepad-test --swing          # as the Swing window reads them (winmm)
+"$J" -jar target/snesible-0.1.0-SNAPSHOT.jar "roms/X.sfc" --stats            # the OpenGL window, timing each second
+"$J" -jar target/snesible-0.1.0-SNAPSHOT.jar "roms/X.sfc" --swing            # the Swing window
+"$J" -jar target/snesible-0.1.0-SNAPSHOT.jar --debug "roms/X.sfc"            # with the memory debugger window (F12)
+"$J" -cp target/classes snesible.Main --debug-screenshot "roms/X.sfc" 600 out.png --space VRAM START@200
                                                                         # the debugger's heat map as a PNG
 ```
 
@@ -105,9 +105,9 @@ J="$JAVA_HOME/bin/java"
 
 ### Debugging techniques that worked
 - **Throwaway diagnostics in the scratchpad**: compile a class *in the same package*
-  (e.g. `package jfc.core.ppu;`) against `target/classes` to read package-private state:
+  (e.g. `package snesible.core.ppu;`) against `target/classes` to read package-private state:
   `javac -cp target/classes -d <scratch>/out Diag.java`, then
-  `java -cp "C:/dev/projects/JFC/target/classes;<scratch>/out" jfc.core.ppu.Diag` (absolute
+  `java -cp "C:/dev/projects/snesible/target/classes;<scratch>/out" snesible.core.ppu.Diag` (absolute
   Windows-style classpath with `;`).
 - `Cpu.setInstructionListener` gives per-instruction hooks (PC histograms, per-line sampling).
 - **Window stutter**: wrap the `VideoSink` in a scratch harness that runs the real
@@ -127,7 +127,7 @@ J="$JAVA_HOME/bin/java"
   this to continue.
 - Readability first, speed second (it currently runs about 10x real time, so there's headroom).
 - No dependencies beyond the JDK for the emulator itself (Gson is test-scope only). LWJGL
-  3.4.3 (GLFW, OpenGL) is the one runtime dependency, used only by `jfc.ui.lwjgl`; Maven copies
+  3.4.3 (GLFW, OpenGL) is the one runtime dependency, used only by `snesible.ui.lwjgl`; Maven copies
   it to `target/lib` and the jar's manifest lists it, so `java -jar` works.
 - Commit at the end of each milestone (the user has approved this pattern), with a descriptive
   body and the `Co-Authored-By` trailer. Don't commit ROMs, test data or saves.

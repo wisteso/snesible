@@ -1,44 +1,44 @@
 # Architecture
 
-JFC is an educational SNES emulator. Each package mirrors a piece of real hardware, and clarity
+Snesible is an educational SNES emulator. Each package mirrors a piece of real hardware, and clarity
 beats speed. This file explains how the pieces fit together; the code's Javadoc explains each
-piece in detail. The frontend (`jfc.ui`: windows, pacing, NTSC, shaders, sound, input) has its
+piece in detail. The frontend (`snesible.ui`: windows, pacing, NTSC, shaders, sound, input) has its
 own detailed guide in `frontend.md`.
 
 ## Package map
 
-Three areas: `jfc.core` is the emulated console and knows nothing about screens or keyboards
-(`CoreBoundaryTest` enforces that); `jfc.ui` presents it to a person; `jfc.tools` holds the
-headless tools. `jfc.Main` only reads the command line and starts one of them. The visual
-memory debugger (Milestone 9) sits beside them in `jfc.debug` (model, `DebugMain`) and
-`jfc.ui.debug` (its raster UI); the core only offers it `jfc.core.observe`.
+Three areas: `snesible.core` is the emulated console and knows nothing about screens or keyboards
+(`CoreBoundaryTest` enforces that); `snesible.ui` presents it to a person; `snesible.tools` holds the
+headless tools. `snesible.Main` only reads the command line and starts one of them. The visual
+memory debugger (Milestone 9) sits beside them in `snesible.debug` (model, `DebugMain`) and
+`snesible.ui.debug` (its raster UI); the core only offers it `snesible.core.observe`.
 
 | Package         | Hardware / role | Key classes |
 |-----------------|-----------------|-------------|
-| `jfc`           | Command-line entry point | `Main` |
-| `jfc.tools`     | Headless tools: `--info`, `--run`, `--screenshot`, `--record-audio`, `--gamepad-test`, `--debug-screenshot` | `CartridgeInfo`, `HeadlessRun`, `Screenshot`, `AudioRecording`, `GamepadTest`, `InputScript`, `DebugScreenshot` |
-| `jfc.core.cartridge` | Cartridge: ROM, SRAM, header, LoROM/HiROM mapping | `Cartridge`, `CartridgeHeader`, `HeaderLocator`, `LoRomMapper`, `HiRomMapper`, `Mirroring` |
-| `jfc.core.cpu`       | 65816 core (inside the Ricoh 5A22) | `Cpu`, `Registers`, `StatusFlags`, `EffectiveAddress`, `CpuBus` |
-| `jfc.core.cpu.io`    | The rest of the 5A22: NMI/IRQ, multiply/divide, joypad ports | `InterruptControl`, `ArithmeticUnit`, `JoypadPorts` |
-| `jfc.core.dma`       | 8-channel DMA and HDMA | `DmaController`, `DmaChannel` |
-| `jfc.core.bus`       | Memory map and per-access timing | `SnesBus` |
-| `jfc.core.ppu`       | Picture processor | `Ppu` (registers and memories), `Renderer` (pipeline), `BackgroundLayer`, `SpriteLayer`, `Mode7Layer`, `WindowMasks`, `Tiles`, `LayerLine` |
-| `jfc.core.apu`       | Audio unit | `Apu` (RAM, I/O, timers, sync), `Spc700`, `Dsp`, `BootRom`, `ApuPorts` |
-| `jfc.core.coprocessor` | Chips on the cartridge board | `Coprocessor` (interface), `Coprocessors` (factory) |
-| `jfc.core.coprocessor.sa1` | SA-1 | `Sa1` (board: both address maps, registers, interrupts, DMA, bit reader, catch-up), `SuperMmc` (ROM banking), `Sa1Arithmetic` |
-| `jfc.core.coprocessor.superfx` | SuperFX / GSU | `SuperFx` (board: both address maps, registers, catch-up), `Gsu` (the RISC core), `PlotUnit` (PLOT/RPIX), `GsuBus` |
-| `jfc.core.system`    | The console | `Snes` (wiring and frame loop), `MasterClock`, `WorkRam` |
-| `jfc.core.observe`   | Debug support: the one hook for watching memory accesses. Each processor gets its bus through `Observable.wrapXxx`, a pass-through unless a debugger installed an `Observer` | `Observable`, `Observer` |
-| `jfc.debug`     | The memory debugger's model: bus wrappers, address decoding per board, per-byte access stamps, PPU/DSP activity worked out from registers; `DebugMain` (a `Main` subclass) | `MemoryObserver`, `AccessRecorder`, `MemorySpace`, `SystemBusMap`, `Sa1Map`, `SuperFxMap`, `VideoActivity`, `SoundActivity`, `DebugMain` |
-| `jfc.ui.debug`  | The memory debugger's raster UI (an ARGB buffer, no toolkit) | `DebugScreen`, `HeatMapView`, `HeatPalette`, `Raster`, `PixelFont` |
-| `jfc.ui`        | The boundary between console and user interface: runs a console in real time (frame loop, saves, input polling), plus what every window shares | `EmulationSession`, `VideoSink`, `InputSource`, `Frame`, `FrameClock`, `PacingMode`, `PlayOptions`, `Controls`, `ToolScreen` (a second window's contents, e.g. the debugger), `ToolRedrawPacer` |
-| `jfc.ui.audio`  | Sound output with dynamic rate control | `AudioOutput`, `AudioResampler` |
-| `jfc.ui.video`  | Turning PPU pixels into a picture: plain RGB, or the NTSC filter | `SnesColor`, `VideoFilter`, `VideoMode` |
-| `jfc.ui.video.ntsc` | Java port of Blargg's `snes_ntsc` (**LGPL 2.1+**, kept separate) | `SnesNtsc`, `NtscSetup` |
-| `jfc.ui.input`  | Gamepad button mapping, shared by every gamepad reader | `GamepadMapping`, `JoystickState` |
-| `jfc.ui.input.winmm` | Windows gamepads through winmm.dll for the Swing window (an `InputSource`; F9 rescans) | `Gamepads`, `WinmmJoysticks` |
-| `jfc.ui.swing`  | The Swing window (a `VideoSink`) and its keyboard; `--swing`, and the fallback | `SwingWindow`, `SwingKeyboard`, `SwingToolWindow` |
-| `jfc.ui.lwjgl`  | The OpenGL window (GLFW via LWJGL, the default): drawing (NTSC on the GPU), keyboard, gamepads, pacing to the display | `LwjglWindow`, `GlRenderer`, `GlfwKeyboard`, `GlfwGamepads`, `GlfwJoysticks`, `PacingDecision`, `GlfwToolWindow` |
+| `snesible`           | Command-line entry point | `Main` |
+| `snesible.tools`     | Headless tools: `--info`, `--run`, `--screenshot`, `--record-audio`, `--gamepad-test`, `--debug-screenshot` | `CartridgeInfo`, `HeadlessRun`, `Screenshot`, `AudioRecording`, `GamepadTest`, `InputScript`, `DebugScreenshot` |
+| `snesible.core.cartridge` | Cartridge: ROM, SRAM, header, LoROM/HiROM mapping | `Cartridge`, `CartridgeHeader`, `HeaderLocator`, `LoRomMapper`, `HiRomMapper`, `Mirroring` |
+| `snesible.core.cpu`       | 65816 core (inside the Ricoh 5A22) | `Cpu`, `Registers`, `StatusFlags`, `EffectiveAddress`, `CpuBus` |
+| `snesible.core.cpu.io`    | The rest of the 5A22: NMI/IRQ, multiply/divide, joypad ports | `InterruptControl`, `ArithmeticUnit`, `JoypadPorts` |
+| `snesible.core.dma`       | 8-channel DMA and HDMA | `DmaController`, `DmaChannel` |
+| `snesible.core.bus`       | Memory map and per-access timing | `SnesBus` |
+| `snesible.core.ppu`       | Picture processor | `Ppu` (registers and memories), `Renderer` (pipeline), `BackgroundLayer`, `SpriteLayer`, `Mode7Layer`, `WindowMasks`, `Tiles`, `LayerLine` |
+| `snesible.core.apu`       | Audio unit | `Apu` (RAM, I/O, timers, sync), `Spc700`, `Dsp`, `BootRom`, `ApuPorts` |
+| `snesible.core.coprocessor` | Chips on the cartridge board | `Coprocessor` (interface), `Coprocessors` (factory) |
+| `snesible.core.coprocessor.sa1` | SA-1 | `Sa1` (board: both address maps, registers, interrupts, DMA, bit reader, catch-up), `SuperMmc` (ROM banking), `Sa1Arithmetic` |
+| `snesible.core.coprocessor.superfx` | SuperFX / GSU | `SuperFx` (board: both address maps, registers, catch-up), `Gsu` (the RISC core), `PlotUnit` (PLOT/RPIX), `GsuBus` |
+| `snesible.core.system`    | The console | `Snes` (wiring and frame loop), `MasterClock`, `WorkRam` |
+| `snesible.core.observe`   | Debug support: the one hook for watching memory accesses. Each processor gets its bus through `Observable.wrapXxx`, a pass-through unless a debugger installed an `Observer` | `Observable`, `Observer` |
+| `snesible.debug`     | The memory debugger's model: bus wrappers, address decoding per board, per-byte access stamps, PPU/DSP activity worked out from registers; `DebugMain` (a `Main` subclass) | `MemoryObserver`, `AccessRecorder`, `MemorySpace`, `SystemBusMap`, `Sa1Map`, `SuperFxMap`, `VideoActivity`, `SoundActivity`, `DebugMain` |
+| `snesible.ui.debug`  | The memory debugger's raster UI (an ARGB buffer, no toolkit) | `DebugScreen`, `HeatMapView`, `HeatPalette`, `Raster`, `PixelFont` |
+| `snesible.ui`        | The boundary between console and user interface: runs a console in real time (frame loop, saves, input polling), plus what every window shares | `EmulationSession`, `VideoSink`, `InputSource`, `Frame`, `FrameClock`, `PacingMode`, `PlayOptions`, `Controls`, `ToolScreen` (a second window's contents, e.g. the debugger), `ToolRedrawPacer` |
+| `snesible.ui.audio`  | Sound output with dynamic rate control | `AudioOutput`, `AudioResampler` |
+| `snesible.ui.video`  | Turning PPU pixels into a picture: plain RGB, or the NTSC filter | `SnesColor`, `VideoFilter`, `VideoMode` |
+| `snesible.ui.video.ntsc` | Java port of Blargg's `snes_ntsc` (**LGPL 2.1+**, kept separate) | `SnesNtsc`, `NtscSetup` |
+| `snesible.ui.input`  | Gamepad button mapping, shared by every gamepad reader | `GamepadMapping`, `JoystickState` |
+| `snesible.ui.input.winmm` | Windows gamepads through winmm.dll for the Swing window (an `InputSource`; F9 rescans) | `Gamepads`, `WinmmJoysticks` |
+| `snesible.ui.swing`  | The Swing window (a `VideoSink`) and its keyboard; `--swing`, and the fallback | `SwingWindow`, `SwingKeyboard`, `SwingToolWindow` |
+| `snesible.ui.lwjgl`  | The OpenGL window (GLFW via LWJGL, the default): drawing (NTSC on the GPU), keyboard, gamepads, pacing to the display | `LwjglWindow`, `GlRenderer`, `GlfwKeyboard`, `GlfwGamepads`, `GlfwJoysticks`, `PacingDecision`, `GlfwToolWindow` |
 
 ## Timing model: "the CPU drives everything"
 
@@ -91,7 +91,7 @@ The SPC700 side of the `Apu` is an inner class (`SpcSide implements Spc700Bus`),
 Each SPC bus cycle calls `tick()`: timers advance, and every 32nd tick the DSP makes a sample,
 which goes into `Apu`'s sample buffer (drained by `drainSamples`).
 
-## Cartridge coprocessors (`jfc.core.coprocessor`)
+## Cartridge coprocessors (`snesible.core.coprocessor`)
 
 `SnesBus` doesn't talk to `Cartridge` directly but to a `CartridgeSlot`: whatever answers in
 cartridge space. For a plain game that's the `Cartridge`. For a coprocessor board it's the
@@ -100,7 +100,7 @@ RAM) and uses `Cartridge` only to hold the ROM/RAM bytes (`romBytes()`, `ramByte
 save-file logic (`markRamChanged()`). `Coprocessors.forCartridge` picks the board from the
 header's `coprocessorType()`; `Snes` builds it and gives it a `Coprocessor.Host` (master
 clock + the cartridge IRQ line, which `InterruptControl.setCartridgeIrq` ORs with the timer
-IRQ). This keeps `jfc.core.coprocessor` free of `jfc.core.system`.
+IRQ). This keeps `snesible.core.coprocessor` free of `snesible.core.system`.
 
 Timing is catch-up, like the APU: `catchUp()` runs the chip up to the master clock. It runs on
 every console access to the board and at every line start (so the chip's IRQ arrives on time
@@ -111,7 +111,7 @@ even while the CPU sits in WAI), and at the end of each frame.
 instruction and returns master cycles. While the GSU owns the ROM (SCMR RON), console ROM
 reads return a fixed pattern that makes the interrupt vectors point into work RAM.
 
-**SA-1**: `Sa1` runs a second, unmodified `jfc.core.cpu.Cpu` on its own bus (inner class
+**SA-1**: `Sa1` runs a second, unmodified `snesible.core.cpu.Cpu` on its own bus (inner class
 `Sa1Side implements CpuBus`, which charges each access to the SA-1's time: 2 master cycles,
 4 for BW-RAM). The SA-1's own vectors are served from its CRV/CNV/CIV registers by that bus;
 the console's NMI/IRQ vectors can be replaced by SNV/SIV the same way on the console side.
@@ -132,13 +132,13 @@ the two CPUs closely interleaved.
    tables in `Renderer` (`PRIORITY_ORDERS`, `MODE1_BG3_FRONT_ORDER`).
 4. Color math (CGWSEL/CGADSUB/COLDATA), in 15-bit color.
 5. Master brightness: the frame buffer stores each pixel as `brightness << 15 | bgr15`. The
-   core stops there; turning that into RGB is the display's job (`jfc.ui.video.SnesColor` for
-   plain RGB, `jfc.ui.video.VideoFilter` for the NTSC filter), so a filter or shader gets the
+   core stops there; turning that into RGB is the display's job (`snesible.ui.video.SnesColor` for
+   plain RGB, `snesible.ui.video.VideoFilter` for the NTSC filter), so a filter or shader gets the
    exact SNES color even during fades.
 
 ## Frame loop, threads and pacing
 
-The boundary between the console and any user interface is two interfaces in `jfc.ui`:
+The boundary between the console and any user interface is two interfaces in `snesible.ui`:
 `VideoSink.present(Frame)` receives each finished picture and `InputSource.poll(int[])`
 supplies buttons. `EmulationSession` owns the `Snes`; `runFrame()` runs one frame: poll every
 `InputSource` and OR their buttons per player, emulate, hand the frame to the `VideoSink`, play
@@ -188,10 +188,10 @@ texture. `GlRendererTest` checks the GPU output equals the Java filter's for eve
 (three setups, all burst phases, scanlines on and off). Scanlines (F3) are drawn as CRT
 beams when the picture is scaled to the window (`crt-scanlines.frag`, in any picture mode).
 Shaders live in
-`src/main/resources/jfc/ui/lwjgl/shaders/`. LWJGL is told to use its FFM memory backend
+`src/main/resources/snesible/ui/lwjgl/shaders/`. LWJGL is told to use its FFM memory backend
 (`Configuration.MEMORY_BACKEND = "ffm"`), which avoids the JVM's `sun.misc.Unsafe` warnings.
 
-## NTSC filter (`jfc.ui.video.ntsc`)
+## NTSC filter (`snesible.ui.video.ntsc`)
 
 A port of Blargg's `snes_ntsc` 0.2.2 that keeps the C code's packed-RGB arithmetic and float
 steps, so output should match Snes9x. It precomputes, for 8192 colors (4 bits red, 5 green,
@@ -213,4 +213,4 @@ So `InterruptControl` is created first and then `interrupts.connect(cpu)` once t
 Milestone 10 is done; its optional extras (shadow mask, 4:3 sharp pixels, NTSC settings) are
 listed in `frontend.md`. Next are the rest of Milestone 9 (visual memory debugger, `m9-debugger-plan.md`; 9a, the heat map, is built) and Milestone
 11 (enhanced audio, `m11-audio-plan.md`). In Milestone 11, an enhanced renderer runs alongside
-the unchanged `Dsp`, which stays the only audio state games can see. The core (`jfc.core`) must not depend on Swing or LWJGL (`CoreBoundaryTest`).
+the unchanged `Dsp`, which stays the only audio state games can see. The core (`snesible.core`) must not depend on Swing or LWJGL (`CoreBoundaryTest`).
