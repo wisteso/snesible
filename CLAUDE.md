@@ -37,6 +37,8 @@ Read these before working on the project:
 - **Never name a game in the docs** (`.md` files): refer to ROMs generically, by the hardware
   and genre labels listed in `docs/development.md` ("the GSU-1 game", "the LoROM
   platformer"), as a legal precaution. No titles, characters, places or on-screen text either.
-  The git-ignored `roms/KEY.md` maps each label to its file.
+  The git-ignored `roms/KEY.md` maps each label to its file. The same goes for code comments,
+  tests and commit messages: describe the hardware feature a game uses ("a 3D game tilts its
+  horizon with offset-per-tile"), not the game.
 - When a milestone or major change lands, update `docs/status.md` (and the other docs if
   their facts changed).
