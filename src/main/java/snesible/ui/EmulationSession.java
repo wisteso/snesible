@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import snesible.core.apu.enhanced.AudioPreset;
+import snesible.core.apu.enhanced.AudioSettings;
+import snesible.core.apu.enhanced.EnhancedRenderer;
 import snesible.core.system.Snes;
 import snesible.ui.audio.AudioOutput;
 
@@ -26,6 +29,11 @@ import snesible.ui.audio.AudioOutput;
  * </ul>
  * Either way the sound adapts to the frames, not the other way round (see
  * {@link AudioOutput}).
+ *
+ * <h2>Sound presets</h2>
+ * The session attaches an {@link EnhancedRenderer} to the console, which plays either the
+ * hardware's own sound or one of the enhanced Quality presets ({@link #cycleAudioPreset}, F10 in
+ * the windows). It only looks at the DSP, so the game runs the same whichever is chosen.
  *
  * <h2>Battery saves</h2>
  * Battery-backed SRAM is written to the save file shortly after the game changes it, and again
@@ -53,6 +61,7 @@ public final class EmulationSession {
     private boolean printStats;
 
     private AudioOutput audio;
+    private final EnhancedRenderer renderer = new EnhancedRenderer(AudioSettings.DEFAULT);
     private long frameNumber;
     /** Run after every frame, or null (see {@link #setAfterFrame}). */
     private Runnable afterFrame;
@@ -73,6 +82,21 @@ public final class EmulationSession {
         this.saveFile = saveFile;
         this.video = video;
         this.inputs = List.copyOf(inputs);
+        snes.apu().setSoundRenderer(renderer);
+    }
+
+    /** Sets the sound preset and stereo options. Safe to call from any thread. */
+    public void setAudioSettings(AudioSettings settings) {
+        renderer.setSettings(settings);
+    }
+
+    /**
+     * Switches to the next sound preset (Hardware, Quality sinc, Quality cubic) and prints it.
+     * Safe to call from any thread: the change crossfades in on the emulation thread.
+     */
+    public void cycleAudioPreset() {
+        AudioPreset preset = renderer.cyclePreset();
+        System.out.println("Sound: " + preset.label());
     }
 
     /** The console's frame rate: about 60.10 for NTSC, 50.01 for PAL. */

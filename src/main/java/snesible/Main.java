@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import snesible.core.apu.enhanced.AudioSettings;
 import snesible.core.cartridge.Cartridge;
 import snesible.core.system.Snes;
 import snesible.debug.DebugMain;
@@ -93,14 +94,20 @@ public class Main {
         System.err.println("""
                 Usage:
                   snesible <rom-file> [options]       Play a game in a window. Options:
-                    --video <mode>                 sharp (default), composite, svideo, rgb,
-                                                   monochrome, rf (NTSC TV filters)
+                    --video <mode>                 sharp (default), rf, composite, svideo, rgb,
+                                                   monochrome (NTSC TV filters)
                     --scanlines                    start with scanlines on (F3)
                     --swing                        the Swing window instead of OpenGL
                     --pacing auto|vsync|clock      frame pacing (OpenGL window; default auto)
                     --refresh <hz>                 refresh rate to ask for in exclusive
                                                    fullscreen (Alt+Enter)
                     --stats                        print timing and audio statistics each second
+                    --audio hardware|sinc|cubic    sound preset to start with (F10 cycles them;
+                                                   default hardware)
+                    --stereo-width <percent>       0 = mono, 100 = as the game mixes (default),
+                                                   up to 200 = twice as wide
+                    --surround-fix                 undo games' inverted-phase "surround" (Quality
+                                                   presets; for headphones)
                   snesible --debug <rom-file> [options]
                                                  Play with the memory debugger in a second
                                                  window (F12 shows or hides it)
@@ -115,6 +122,8 @@ public class Main {
                                                  Run headless and save the last frame as a PNG,
                                                  pressing buttons (e.g. START@200) on the way
                   snesible --record-audio <rom-file> <frames> <out.wav> [BUTTON@frame ...]
+                                                 [--audio <preset>] [--stereo-width <percent>]
+                                                 [--surround-fix]
                                                  Run headless and save the sound as a WAV file
                   snesible --debug-screenshot <rom-file> <frames> <out.png> [--space <name>]
                                                  [--size <w>x<h>] [BUTTON@frame ...]
@@ -127,7 +136,10 @@ public class Main {
      * Plays a game in a window: the OpenGL window by default, or Swing with {@code --swing} (and
      * as a fallback when OpenGL 3.3 or LWJGL isn't available).
      */
-    private void play(Path romFile, String[] options) throws IOException {
+    private void play(Path romFile, String[] arguments) throws IOException {
+        List<String> rest = new java.util.ArrayList<>();
+        AudioSettings audio = AudioSettings.parse(arguments, rest);
+        String[] options = rest.toArray(new String[0]);
         VideoMode videoMode = VideoMode.SHARP;
         boolean scanlines = false;
         boolean swing = false;
@@ -145,7 +157,7 @@ public class Main {
                 default -> throw new IllegalArgumentException("Unknown option: " + options[i]);
             }
         }
-        PlayOptions playOptions = new PlayOptions(videoMode, scanlines, pacing, fullscreenRefresh, stats);
+        PlayOptions playOptions = new PlayOptions(videoMode, scanlines, pacing, fullscreenRefresh, stats, audio);
 
         Cartridge cart = Cartridge.load(romFile);
         String title = cart.header().title();

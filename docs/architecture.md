@@ -23,7 +23,8 @@ memory debugger (Milestone 9) sits beside them in `snesible.debug` (model, `Debu
 | `snesible.core.dma`       | 8-channel DMA and HDMA | `DmaController`, `DmaChannel` |
 | `snesible.core.bus`       | Memory map and per-access timing | `SnesBus` |
 | `snesible.core.ppu`       | Picture processor | `Ppu` (registers and memories), `Renderer` (pipeline), `BackgroundLayer`, `SpriteLayer`, `Mode7Layer`, `WindowMasks`, `Tiles`, `LayerLine` |
-| `snesible.core.apu`       | Audio unit | `Apu` (RAM, I/O, timers, sync), `Spc700`, `Dsp`, `BootRom`, `ApuPorts` |
+| `snesible.core.apu`       | Audio unit | `Apu` (RAM, I/O, timers, sync), `Spc700`, `Dsp`, `BootRom`, `ApuPorts`; `DspState` (read-only view of the DSP) and `SoundRenderer` (what turns the DSP's work into the played sound) |
+| `snesible.core.apu.enhanced` | Enhanced audio (Milestone 11): the Quality presets | `EnhancedRenderer` (mixing, echo, de-click, limiter, dither, stereo, preset crossfade), `EnhancedVoice` (follows one DSP voice), `KernelTable` and `Interpolator` (cubic and sinc, stretched for anti-aliasing), `AudioPreset`, `AudioSettings` |
 | `snesible.core.coprocessor` | Chips on the cartridge board | `Coprocessor` (interface), `Coprocessors` (factory) |
 | `snesible.core.coprocessor.sa1` | SA-1 | `Sa1` (board: both address maps, registers, interrupts, DMA, bit reader, catch-up), `SuperMmc` (ROM banking), `Sa1Arithmetic` |
 | `snesible.core.coprocessor.superfx` | SuperFX / GSU | `SuperFx` (board: both address maps, registers, catch-up), `Gsu` (the RISC core), `PlotUnit` (PLOT/RPIX), `GsuBus` |
@@ -170,6 +171,13 @@ After a pause (window drag, display measurement, fullscreen switch) the buffer i
 with silence instead of creeping back. Measured with `--stats`: frame gaps 16.0-17.5 ms, the
 buffer settling at ~50%, nothing dropped.
 
+**Sound presets.** `EmulationSession` attaches an `EnhancedRenderer` to the APU
+(`Apu.setSoundRenderer`), which `Apu` calls after every DSP sample. In the Hardware preset it
+leaves the DSP's sample alone; in the Quality presets it replaces it with its own. It reads the
+DSP only through `DspState`'s getters, so the emulation is identical with any preset (tested
+against the test games). F10 changes the preset from the window's thread through a volatile
+field; the renderer crossfades over 5 ms. Details in `m11-audio-plan.md`.
+
 **Gamepads (`GlfwGamepads`)**: read through GLFW on the main thread; GLFW's joystick callback
 reports pads being plugged in or out, so nothing is ever searched for. Pads in SDL's
 controller database (bundled with GLFW) use their standard layout, mapped by position (bottom
@@ -211,6 +219,6 @@ So `InterruptControl` is created first and then `interrupts.connect(cpu)` once t
 ## Planned direction
 
 Milestone 10 is done; its optional extras (shadow mask, 4:3 sharp pixels, NTSC settings) are
-listed in `frontend.md`. Next are the rest of Milestone 9 (visual memory debugger, `m9-debugger-plan.md`; 9a, the heat map, is built) and Milestone
-11 (enhanced audio, `m11-audio-plan.md`). In Milestone 11, an enhanced renderer runs alongside
-the unchanged `Dsp`, which stays the only audio state games can see. The core (`snesible.core`) must not depend on Swing or LWJGL (`CoreBoundaryTest`).
+listed in `frontend.md`. Milestone 11 (enhanced audio, `m11-audio-plan.md`) is built. Next is
+the rest of Milestone 9 (visual memory debugger, `m9-debugger-plan.md`; 9a, the heat map, is
+built). The core (`snesible.core`) must not depend on Swing or LWJGL (`CoreBoundaryTest`).

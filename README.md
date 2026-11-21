@@ -17,10 +17,18 @@ java -jar target/snesible-0.1.0-SNAPSHOT.jar "roms/game.sfc"
 Keys: arrows = D-pad, X = A, Z = B, S = X, A = Y, Q = L, W = R, Enter = Start,
 Shift/Backspace = Select, Escape = quit. F11 = fullscreen (instant), Alt+Enter = exclusive
 fullscreen (lowest latency; the screen blanks for a few seconds while the monitor adjusts).
-F2 cycles the picture mode (sharp pixels, or an NTSC TV filter for a composite, S-Video, RGB,
-black-and-white or RF connection) and F3 toggles scanlines (drawn like a CRT's beams in the
-OpenGL window). `--video composite` (or `svideo`, `rgb`, `monochrome`, `rf`) and `--scanlines` pick
+F2 cycles the picture mode (sharp pixels, or an NTSC TV filter for an RF, composite, S-Video,
+RGB or black-and-white connection) and F3 toggles scanlines (drawn like a CRT's beams in the
+OpenGL window). `--video composite` (or `rf`, `svideo`, `rgb`, `monochrome`) and `--scanlines` pick
 them at startup.
+
+F10 cycles the sound: **Hardware** (exactly what the console's DSP outputs, the default) and two
+**Quality** presets that sound better than the console can, in the style of the SNESamp music
+player: 8-point sinc or cubic interpolation, anti-aliasing for samples played above their
+recorded pitch, floating-point mixing with a soft limiter, and de-click. `--audio sinc` (or
+`cubic`, `hardware`) picks one at startup. `--stereo-width <percent>` (0 = mono, up to 200) and
+`--surround-fix` (undoes games' inverted-phase "surround", which sounds hollow on headphones;
+Quality presets) adjust the stereo. The game runs exactly the same whichever is chosen.
 
 The window uses OpenGL (through LWJGL) and paces itself to the display: locked to vsync on a
 60 or 120 Hz display, or a steady 60.10 Hz clock otherwise, which G-Sync/FreeSync displays show
@@ -62,7 +70,8 @@ java -jar target/snesible-0.1.0-SNAPSHOT.jar --record-audio "roms/game.sfc" 1800
 
 `--info` prints cartridge headers. `--run` runs a game without video and reports where the CPU
 spends its time. `--screenshot` saves a frame as a PNG (add `--video composite` for the NTSC
-filter), and `--record-audio` saves the sound as a WAV file. The headless modes accept scripted button presses (`BUTTON@frame`).
+filter), and `--record-audio` saves the sound as a WAV file (it takes the same `--audio`, `--stereo-width`
+and `--surround-fix` options). The headless modes accept scripted button presses (`BUTTON@frame`).
 
 The APU's boot ROM isn't Nintendo's: it's a clean-room replacement speaking the same upload
 protocol (see `snesible.core.apu.BootRom`).
@@ -103,6 +112,7 @@ mvn test -Dtest=CpuSingleStepTest -Dsnesible.cpuTests=all
 | `snesible.core.bus`       | Memory map and per-access timing (A-bus and B-bus)                    |
 | `snesible.core.ppu`       | Picture processor: backgrounds, sprites, Mode 7, windows, color math  |
 | `snesible.core.apu`       | Audio unit: SPC700 CPU, DSP, timers, boot ROM                         |
+| `snesible.core.apu.enhanced` | Enhanced audio presets: interpolation, anti-aliasing, mixing    |
 | `snesible.core.system`    | The console: master clock, work RAM, and wiring it all together       |
 | `snesible.core.coprocessor` | Cartridge chips: SuperFX (GSU) and SA-1                        |
 | `snesible.ui`        | Runs the console in real time: frame pacing, saves, input polling     |

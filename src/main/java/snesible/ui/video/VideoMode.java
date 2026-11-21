@@ -11,6 +11,8 @@ public enum VideoMode {
 
     /** Each SNES pixel as a crisp square, as an emulator usually shows it. */
     SHARP("sharp pixels", null),
+    /** Composite with visible dot crawl (no field merging). */
+    RF("NTSC RF", NtscSetup.RF),
     /** Composite cable: color bleeding and rainbow artifacts. */
     COMPOSITE("NTSC composite", NtscSetup.COMPOSITE),
     /** S-Video: color bleeding only. */
@@ -18,9 +20,7 @@ public enum VideoMode {
     /** RGB: crisp, slightly softened. */
     RGB("NTSC RGB", NtscSetup.RGB),
     /** Black-and-white TV. */
-    MONOCHROME("NTSC monochrome", NtscSetup.MONOCHROME),
-    /** Composite with visible dot crawl (no field merging). */
-    RF("NTSC RF", NtscSetup.RF);
+    MONOCHROME("NTSC monochrome", NtscSetup.MONOCHROME);
 
     private final String label;
     private final NtscSetup ntscSetup;
@@ -40,7 +40,7 @@ public enum VideoMode {
         return ntscSetup;
     }
 
-    /** The next mode, for cycling with a key. */
+    /** The next mode, for cycling with a key (F2): in the order they're declared, then back to sharp. */
     public VideoMode next() {
         return values()[(ordinal() + 1) % values().length];
     }

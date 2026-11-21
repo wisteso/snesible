@@ -5,23 +5,33 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import snesible.core.apu.Apu;
+import snesible.core.apu.enhanced.AudioSettings;
+import snesible.core.apu.enhanced.EnhancedRenderer;
 import snesible.core.cartridge.Cartridge;
 import snesible.core.system.Snes;
 
 /**
  * {@code --record-audio}: runs a game without a window and saves its sound as a WAV file. Useful
  * for checking the APU without listening in real time, and for comparing changes.
+ *
+ * <p>The sound options of the windows work here too ({@code --audio}, {@code --stereo-width},
+ * {@code --surround-fix}), so the presets can be recorded and compared side by side.
  */
 public final class AudioRecording {
 
     private AudioRecording() {
     }
 
-    public static void record(Path rom, int frames, Path output, String[] presses) throws IOException {
-        InputScript input = new InputScript(presses);
+    public static void record(Path rom, int frames, Path output, String[] arguments) throws IOException {
+        List<String> presses = new ArrayList<>();
+        AudioSettings audio = AudioSettings.parse(arguments, presses);
+        InputScript input = new InputScript(presses.toArray(new String[0]));
         Snes snes = new Snes(Cartridge.load(rom));
         snes.reset();
+        snes.apu().setSoundRenderer(new EnhancedRenderer(audio));
         ByteArrayOutputStream pcm = new ByteArrayOutputStream();
         short[] samples = new short[4096];
         for (int frame = 1; frame <= frames; frame++) {
@@ -36,7 +46,8 @@ public final class AudioRecording {
         try (OutputStream out = Files.newOutputStream(output)) {
             writeWav(out, pcm.toByteArray());
         }
-        System.out.printf("Saved %.1f seconds of audio to %s%n", pcm.size() / 4.0 / Apu.SAMPLE_RATE, output);
+        System.out.printf("Saved %.1f seconds of audio (%s) to %s%n", pcm.size() / 4.0 / Apu.SAMPLE_RATE,
+                audio.preset().label(), output);
     }
 
     /**

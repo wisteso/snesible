@@ -187,6 +187,7 @@ saved position and size. `toggleFullscreen(Fullscreen kind)` tracks the state in
 - Window keys:
   - F2: next `VideoMode`.
   - F3: scanlines (the beam shader, any picture mode).
+  - F10: next sound preset (`EmulationSession.cycleAudioPreset`), as in the Swing window.
   - F11: borderless fullscreen.
   - Alt+Enter: exclusive fullscreen.
   - Esc: quit.
@@ -374,7 +375,7 @@ with scanlines on and off, over frames 1-3 (all burst phases).
 - `SnesColor`: plain RGB from a packed pixel through a 2^19-entry lookup table (2 MiB).
   Channels are widened 5→8 bits by copying the top bits, then `*brightness/15`, rounded
   down. Used by Swing, PNG screenshots and (mirrored in GLSL) the sharp shader.
-- `VideoMode`: `SHARP`, `COMPOSITE`, `SVIDEO`, `RGB`, `MONOCHROME` and `RF`. Each has an
+- `VideoMode`: `SHARP`, `RF`, `COMPOSITE`, `SVIDEO`, `RGB` and `MONOCHROME`. Each has an
   `NtscSetup` (null for sharp). F2 cycles through them in this order. `parse()` accepts
   `svideo` or `s-video`.
 - `VideoFilter`: what Swing and `--screenshot` use. Sharp output is 256x224. NTSC output is
@@ -417,6 +418,13 @@ with scanlines on and off, over frames 1-3 (all burst phases).
   a fullscreen switch), it tops the buffer up with silence to 50% at once instead of
   creeping back at 0.5%.
 - No sound device: the session runs silently and prints a line.
+- **Sound presets (Milestone 11).** The samples `AudioOutput` plays are already the chosen
+  preset's: the enhanced renderer works inside the core (`snesible.core.apu.enhanced`), at the
+  DSP's 32 kHz, so nothing in `snesible.ui.audio` changed. The window side is only F10 (both
+  windows call `EmulationSession.cycleAudioPreset`, which prints the new preset) and the
+  `--audio`, `--stereo-width` and `--surround-fix` options, parsed by `AudioSettings.parse` into
+  `PlayOptions.audio`. Swing: F10 is also Windows' "open the menu bar" key; the window has no
+  menu bar and the key dispatcher consumes the key.
 - `--stats` prints, once a second: fps, the shortest and longest frame gap, the average
   buffer fill, the rate adjustment and dropped bytes. Healthy numbers on the user's machine:
   61 fps, gaps 16.0-17.5 ms windowed (16.3-17.0 fullscreen), buffer ~50%, 0 dropped. The

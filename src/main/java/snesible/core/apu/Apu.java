@@ -60,6 +60,8 @@ public final class Apu implements ApuPorts {
     private final short[] sampleBuffer = new short[SAMPLE_RATE];
     private int sampleCount;
     private final int[] stereoSample = new int[2];
+    /** Makes the sound that's played from the DSP's work, or null to play the DSP's own output. */
+    private SoundRenderer renderer;
 
     /**
      * Timer 0 and 1 tick at 8 kHz (every 128 SPC cycles), timer 2 at 64 kHz (every 16). Each
@@ -136,6 +138,15 @@ public final class Apu implements ApuPorts {
         System.arraycopy(sampleBuffer, count, sampleBuffer, 0, sampleCount - count);
         sampleCount -= count;
         return count;
+    }
+
+    /**
+     * Attaches a renderer that makes the played sound from the DSP's work (the enhanced audio
+     * presets), or detaches it with null. It only looks at the DSP, so the console runs exactly the
+     * same either way. Call it before running, from the thread that runs the console.
+     */
+    public void setSoundRenderer(SoundRenderer renderer) {
+        this.renderer = renderer;
     }
 
     public Spc700 cpu() {
@@ -222,6 +233,9 @@ public final class Apu implements ApuPorts {
         if (--cyclesUntilSample == 0) {
             cyclesUntilSample = CYCLES_PER_SAMPLE;
             dsp.generateSample(stereoSample);
+            if (renderer != null) {
+                renderer.afterSample(dsp, stereoSample); // may replace what's played
+            }
             if (sampleCount + 2 > sampleBuffer.length) {
                 sampleCount = 0; // nobody is collecting audio (e.g. a headless run): drop it
             }

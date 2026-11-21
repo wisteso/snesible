@@ -32,8 +32,11 @@ package snesible.core.apu;
  * We produce each sample in one go, which sounds the same except for some register-timing edge
  * cases. Interpolation uses a computed Gaussian curve close to the hardware's table, not the
  * table itself.
+ *
+ * <p>It implements {@link DspState}, a read-only view used by the enhanced sound renderer: only
+ * getters, at the end of this file, so nothing here changes when the renderer is in use.
  */
-final class Dsp {
+final class Dsp implements DspState {
 
     // Global register addresses.
     private static final int MVOLL = 0x0C;
@@ -240,7 +243,7 @@ final class Dsp {
         voice.envelope = 0;
         voice.envelopeMode = EnvelopeMode.ATTACK;
         // A keyed-on voice stays silent for 5 samples while the hardware fetches its first data.
-        voice.keyOnDelay = 5;
+        voice.keyOnDelay = KEY_ON_DELAY;
         registers[ENDX] &= ~(1 << v);
         decodeFourSamples(v);
     }
@@ -507,6 +510,55 @@ final class Dsp {
 
     private static int clamp16(int value) {
         return Math.max(-32768, Math.min(32767, value));
+    }
+
+    // =============================================================================================
+    // DspState: the read-only view for the enhanced renderer
+    // =============================================================================================
+
+    @Override
+    public int register(int address) {
+        return registers[address & 0x7F];
+    }
+
+    @Override
+    public int voiceSample(int voice, int index) {
+        return voices[voice].buffer[index];
+    }
+
+    @Override
+    public int voiceRingPosition(int voice) {
+        return voices[voice].bufferPosition;
+    }
+
+    @Override
+    public int voiceInterpolationPosition(int voice) {
+        return voices[voice].interpolationPosition;
+    }
+
+    @Override
+    public int voiceEnvelope(int voice) {
+        return voices[voice].envelope;
+    }
+
+    @Override
+    public int voiceKeyOnDelay(int voice) {
+        return voices[voice].keyOnDelay;
+    }
+
+    @Override
+    public int noiseSample() {
+        return (short) (noise << 1); // as runVoice uses it
+    }
+
+    @Override
+    public int echoOutput(int channel) {
+        return echoOutput[channel];
+    }
+
+    @Override
+    public int gaussianWeight(int fraction, int tap) {
+        return GAUSSIAN[fraction][tap];
     }
 
     /**

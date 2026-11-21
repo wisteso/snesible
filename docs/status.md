@@ -1,6 +1,8 @@
 # Project status
 
-Last updated: 2026-11-20: the project was renamed from JFC to **Snesible** (folder
+Last updated: 2026-11-20: Milestone 11 (enhanced audio presets, F10) is built; from recordings the
+user prefers Quality (sinc) to cubic ("almost too tinny"). Stereo width and the surround fix aren't
+tried by ear yet. Earlier the same day, the project was renamed from JFC to **Snesible** (folder
 `C:\dev\projects\snesible`, package `snesible`, jar `snesible-0.1.0-SNAPSHOT.jar`, test
 property `snesible.cpuTests`). Older commit messages still say JFC.
 
@@ -26,7 +28,7 @@ ICU64-style visual memory debugger (`m9-debugger-plan.md`).
 | - | Offset-per-tile in modes 2 and 4 (the GSU-1 game's horizon); GSU background ROM/RAM buffers | see git log | done |
 | 9 | Visual memory debugger, ICU64-style: heat map, inspect and edit RAM, tile and sprite viewer, maybe a value scanner (plan: `m9-debugger-plan.md`) | - | 9a (heat map) built and play-tested by the user (`--debug`); maximized-window slowdown fixed, to re-check; 9b-9d planned |
 | 10 | Move video and input to LWJGL; CRT/NTSC shaders (plan: `m10-shader-plan.md`) | see git log | done, merged 2026-11-15: 10a (frontend boundary, 15-bit frame buffer), 10b (Java NTSC filter), 10c (package layout, OpenGL window, frame pacing), 10d (NTSC on the GPU), 10f (GLFW gamepads), and from 10e the beam-profile scanlines (the user likes them). Optional extras (shadow mask, 4:3 sharp pixels, NTSC settings) are listed in `frontend.md`; curvature was declined |
-| 11 | Enhanced audio, SNESamp-style: higher output rate, sinc/cubic interpolation, per-voice anti-aliasing, float mixing, stereo controls, Hardware/Quality presets (plan: `m11-audio-plan.md`) | - | planned; open decisions in the plan |
+| 11 | Enhanced audio, SNESamp-style: sinc/cubic interpolation, per-voice anti-aliasing, float mixing, de-click, stereo width and surround fix, Hardware/Quality presets, at 32 kHz (plan: `m11-audio-plan.md`) | see git log | built 2026-11-20: F10 cycles Hardware (default), Quality (sinc), Quality (cubic); `--audio`, `--stereo-width`, `--surround-fix`. Tested (emulation unchanged, matches the DSP, anti-aliasing, de-click); the user prefers sinc over cubic (recordings); stereo options not yet tried |
 
 ## What the user has confirmed by playing
 

@@ -89,6 +89,8 @@ public final class LwjglWindow implements VideoSink {
     private GlRenderer renderer;
     /** The memory debugger's window, or null when playing normally. */
     private GlfwToolWindow tool;
+    /** The game being played, for F10 (the sound preset); null until {@link #play} starts. */
+    private EmulationSession session;
 
     // Picture mode, changed with F2/F3.
     private VideoMode mode;
@@ -165,6 +167,8 @@ public final class LwjglWindow implements VideoSink {
         List<InputSource> inputs = List.of(keyboard, gamepads);
         EmulationSession session = new EmulationSession(snes, saveFile, this, inputs);
         session.setPrintStats(options.stats());
+        session.setAudioSettings(options.audio());
+        this.session = session;
         if (toolScreen != null) {
             tool = GlfwToolWindow.open(toolScreen, window, capabilities, currentMonitor());
             session.setAfterFrame(tool::afterFrame);
@@ -389,6 +393,12 @@ public final class LwjglWindow implements VideoSink {
                 }
                 case GLFW_KEY_F9 -> {
                     System.out.println("This window notices gamepads by itself; no need to search.");
+                    return;
+                }
+                case GLFW_KEY_F10 -> {
+                    if (session != null) {
+                        session.cycleAudioPreset();
+                    }
                     return;
                 }
                 case GLFW_KEY_F11 -> {

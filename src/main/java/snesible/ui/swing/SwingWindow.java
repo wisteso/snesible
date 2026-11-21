@@ -75,6 +75,8 @@ public final class SwingWindow implements VideoSink {
     private Display display;
     /** F12: shows the tool window again (does nothing without one). */
     private Runnable showTool = () -> { };
+    /** F10: switches to the next sound preset. */
+    private Runnable cycleAudioPreset = () -> { };
 
     /**
      * Opens a Swing window and starts playing on an emulation thread paced by a steady clock.
@@ -105,6 +107,8 @@ public final class SwingWindow implements VideoSink {
         }
         EmulationSession session = new EmulationSession(snes, saveFile, window, inputs);
         session.setPrintStats(options.stats());
+        session.setAudioSettings(options.audio());
+        window.cycleAudioPreset = session::cycleAudioPreset;
         Runnable onClose = session::stop;
         if (toolScreen != null) {
             SwingToolWindow tool = SwingToolWindow.open(toolScreen);
@@ -196,6 +200,12 @@ public final class SwingWindow implements VideoSink {
         if (e.getID() == KeyEvent.KEY_PRESSED && e.getKeyCode() == KeyEvent.VK_F9) {
             System.out.println("Looking for gamepads...");
             rescanDevices.run();
+            return true;
+        }
+        if (e.getID() == KeyEvent.KEY_PRESSED && e.getKeyCode() == KeyEvent.VK_F10) {
+            // F10 also opens a window's menu bar on Windows; there's none here, and returning
+            // true consumes the key so nothing else sees it.
+            cycleAudioPreset.run();
             return true;
         }
         if (e.getID() == KeyEvent.KEY_PRESSED && e.getKeyCode() == KeyEvent.VK_F3) {

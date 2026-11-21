@@ -31,7 +31,8 @@ Read these before working on the project:
   boundaries (`VideoSink`, `InputSource`), so Swing and OpenGL windows share one core.
 - Verify with evidence: run the test suites, and use the headless `--run`, `--screenshot` and
   `--record-audio` modes (read PNGs with the Read tool). Don't claim a fix without checking it.
-- Commit at the end of each milestone with the `Co-Authored-By` trailer. Never commit `roms/`,
+- **Don't commit automatically**: the user reviews changes first. When a milestone is done, offer
+  the commit and make it only when asked, with the `Co-Authored-By` trailer. Never commit `roms/`,
   `testdata/`, `.srm` files or `gamepad.properties` (all git-ignored).
 - Don't embed copyrighted console code (the APU boot ROM is a clean-room replacement).
 - **Never name a game in the docs** (`.md` files): refer to ROMs generically, by the hardware
