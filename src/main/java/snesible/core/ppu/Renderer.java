@@ -27,7 +27,7 @@ import java.util.Arrays;
  * <pre>
  *   mode  BG1   BG2   BG3   BG4   typical use
  *    0    2bpp  2bpp  2bpp  2bpp  four simple layers
- *    1    4bpp  4bpp  2bpp   -    by far the most common (SMW, Zelda, Metroid)
+ *    1    4bpp  4bpp  2bpp   -    by far the most common (two detailed layers plus a HUD)
  *    2    4bpp  4bpp   -     -    with offset-per-tile scrolling*
  *    3    8bpp  4bpp   -     -    256-color artwork
  *    4    8bpp  2bpp   -     -    256 colors plus offset-per-tile*

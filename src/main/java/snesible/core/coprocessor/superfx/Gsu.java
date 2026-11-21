@@ -3,10 +3,10 @@ package snesible.core.coprocessor.superfx;
 /**
  * The GSU ("Graphics Support Unit"), the RISC processor inside the SuperFX chip.
  *
- * <p>It's a 16-bit processor built to draw: Star Fox's polygons and Yoshi's Island's stretched
- * and rotated sprites are computed and plotted by the GSU into its own RAM, and the console
- * then copies the finished picture into VRAM. GSU-1 ("Mario Chip", Star Fox) runs at 10.7 MHz;
- * GSU-2 (Yoshi's Island) can run at the full 21.4 MHz master clock.
+ * <p>It's a 16-bit processor built to draw: 3D polygons, and sprites stretched and rotated
+ * beyond what the PPU can do, are computed and plotted by the GSU into its own RAM, and the
+ * console then copies the finished picture into VRAM. The GSU-1 runs at 10.7 MHz; the GSU-2
+ * can run at the full 21.4 MHz master clock.
  *
  * <h2>Registers</h2>
  * <pre>
@@ -53,9 +53,9 @@ package snesible.core.coprocessor.superfx;
  * (after R14 changes) and writing a byte to RAM (STW, SM, SBK, ...). The GSU starts the access
  * and carries on with the next instructions; only something that needs the same buffer again
  * (GETB reading the ROM byte, another RAM access, a code fetch from that memory) waits for
- * the rest of it. Games rely on this: Star Fox writes R14 a few instructions before its GETB,
- * so the ROM fetch costs almost nothing. Charging these accesses up front slowed Star Fox's
- * GSU-bound scenes: its "scramble" launch scene drew about 9 pictures a second instead of 10.4.
+ * the rest of it. Games rely on this: well-tuned GSU code writes R14 a few instructions before
+ * its GETB, so the ROM fetch costs almost nothing. Charging these accesses up front made a
+ * GSU-bound 3D scene in one of the test games draw about 9 pictures a second instead of 10.4.
  * The exact cycle counts don't affect what games compute, only how long it takes.
  */
 final class Gsu {

@@ -217,7 +217,7 @@ class SnesTest {
 
     @Test
     void hdmaChannelEnabledMidFrameRunsFromItsCurrentTableAddress() {
-        // Yoshi's Island enables HDMA a few lines into the frame, after setting the channel's
+        // Some games enable HDMA a few lines into the frame, after setting the channel's
         // table address ($43x8-9) and line counter ($43xA) itself. The line-0 restart has
         // already happened by then, so the channel must pick up from those registers.
         Snes snes = boot(IDLE_LOOP);

@@ -4,7 +4,7 @@ package snesible.core.ppu;
  * The PPU's two "windows": horizontal spans that can hide parts of layers.
  *
  * <p>Each window is just a left and right edge ($2126-$2129), the same on every line. Changing
- * the edges per line with HDMA makes shapes: circles, spotlights, SMW's keyhole, the
+ * the edges per line with HDMA makes shapes: circles, spotlights, keyhole shapes, the
  * "iris" wipes. Each layer (BG1-BG4, sprites, and the special "color window" used by color
  * math) chooses:
  * <ul>

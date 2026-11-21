@@ -26,9 +26,9 @@ import snesible.core.coprocessor.Coprocessor;
  * bus (RON) and the RAM bus (RAN) to the GSU, starts it, and then runs its own code from work
  * RAM until the GSU is done. While the GSU owns the ROM, the console reads fixed values instead
  * of ROM. Those values are chosen so the interrupt vectors at $FFE0-$FFEF point into work RAM
- * (NMI to $0108, IRQ to $010C), where the game has put small handlers. That's why Star Fox's
- * own header lists NMI $0108 and IRQ $010C. While the GSU owns the RAM, the console reads open
- * bus there and its writes are lost.
+ * (NMI to $0108, IRQ to $010C), where the game has put small handlers. That's why some
+ * SuperFX games' own headers list NMI $0108 and IRQ $010C. While the GSU owns the RAM, the
+ * console reads open bus there and its writes are lost.
  *
  * <h2>Registers ($3030 onward)</h2>
  * <pre>
@@ -67,7 +67,7 @@ public final class SuperFx implements Coprocessor {
     private final byte[] rom;
     private final byte[] ram;
     private final Gsu gsu;
-    /** VCR: 1 for the GSU-1 (Mario Chip) boards, 4 for the GSU-2 boards. */
+    /** VCR: 1 for the GSU-1 boards, 4 for the GSU-2 boards. */
     private final int version;
 
     private Host host;

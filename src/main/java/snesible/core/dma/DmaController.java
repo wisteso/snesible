@@ -102,9 +102,9 @@ public final class DmaController {
      *
      * <p>Every channel, enabled or not, gets its "finished" state cleared here. That matters for
      * channels a game enables <i>later</i> in the frame: they then run from whatever their
-     * table address ($43x8-9) and line counter ($43xA) hold, without a table restart. Yoshi's
-     * Island does this: it sets those registers itself and enables HDMA a few lines down (its
-     * message box window comes from such a channel).
+     * table address ($43x8-9) and line counter ($43xA) hold, without a table restart. Games use
+     * this for effects that start partway down the screen: they set those registers themselves
+     * and enable HDMA a few lines down (for example, a message box's window shape).
      *
      * <p>The "transfer on this line" flag is cleared too, and set again (on every channel) only
      * when at least one channel is enabled at this point, which is when the hardware runs its

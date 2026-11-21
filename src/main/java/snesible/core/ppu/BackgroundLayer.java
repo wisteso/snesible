@@ -19,8 +19,9 @@ package snesible.core.ppu;
  * <h2>Offset-per-tile (modes 2 and 4)</h2>
  * In these modes BG3 isn't drawn. Instead, its tilemap becomes a table that gives each 8-pixel
  * column of the screen its own scroll values for BG1 and BG2. Games use it to bend or tilt a
- * background: Star Fox tilts the horizon as the Arwing banks, and Tetris Attack shifts columns
- * of blocks. Each table entry is a 16-bit word, read from BG3's map at BG3's scroll position:
+ * background: a 3D game tilts its sky-and-ground horizon as the player banks, giving each column
+ * a different vertical scroll, and puzzle games shift single columns of blocks. Each table
+ * entry is a 16-bit word, read from BG3's map at BG3's scroll position:
  * <pre>
  *   bit 15     mode 4 only: 1 = this entry is a vertical offset, 0 = horizontal
  *   bit 14     the entry applies to BG2
@@ -82,7 +83,8 @@ final class BackgroundLayer {
         int mapHeightPixels = tilemapHeightTiles * tileSize;
         // The PPU uses the beam's line number, and the first visible line is beam line 1. So with
         // a vertical scroll of 0, the top of the picture shows the map's row 1, not row 0. Games
-        // allow for this (many scroll by -1), and Super Metroid's HUD is one line off without it.
+        // allow for this (many scroll by -1); a status bar split by a mid-screen IRQ is one line
+        // off without it.
         int beamLine = screenY + 1;
         int colorsPerPalette = 1 << bitsPerPixel;
         int appliesToThisLayer = OFFSET_APPLIES_TO_BG1 << index;

@@ -10,7 +10,7 @@ import snesible.core.cpu.Cpu;
 import snesible.core.cpu.CpuBus;
 
 /**
- * An SA-1 cartridge board (Super Mario RPG, Kirby Super Star, ...).
+ * An SA-1 cartridge board.
  *
  * <p>The SA-1 is a second 65816, clocked at 10.74 MHz (three times the console CPU's usual
  * speed), plus memory and helper hardware on the cartridge. The two CPUs share the ROM, 2 KiB

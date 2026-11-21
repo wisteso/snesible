@@ -21,7 +21,7 @@ package snesible.core.ppu;
  * </pre>
  * A-D are signed 8.8 fixed-point numbers ($211B-$211E). For rotation by angle t with scale s
  * they're A = D = cos(t)/s, B = sin(t)/s, C = -sin(t)/s. Changing the matrix per line with
- * HDMA gives the famous perspective floors (F-Zero, Mario Kart).
+ * HDMA gives the famous perspective floors of racing and flying games.
  *
  * <p>The hardware works it out per line with some truncation ({@code & ~63}). We copy that
  * truncation exactly, since games line their pictures up against it.

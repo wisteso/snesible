@@ -142,8 +142,8 @@ class CartridgeTest {
 
     @Test
     void saveFileSitsNextToTheRom() {
-        assertEquals(Path.of("roms", "Super Mario World.srm"),
-                Cartridge.saveFileFor(Path.of("roms", "Super Mario World.sfc")));
+        assertEquals(Path.of("roms", "My Game.srm"),
+                Cartridge.saveFileFor(Path.of("roms", "My Game.sfc")));
     }
 
     @Test

@@ -22,8 +22,8 @@ import java.util.Arrays;
 public final class Cartridge implements CartridgeSlot {
 
     /**
-     * GSU RAM size for SuperFX games whose header predates the extended header. Star Fox is one;
-     * its board has 32 KiB.
+     * GSU RAM size for SuperFX games whose header predates the extended header, so it doesn't
+     * say how much RAM the board has. The early GSU-1 boards have 32 KiB.
      */
     private static final int DEFAULT_SUPER_FX_RAM = 32 * 1024;
 

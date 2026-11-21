@@ -46,8 +46,8 @@ public final class JoypadPorts {
      *
      * <p>A real D-pad is a rocker: it physically can't press left and right (or up and down) at
      * once. A keyboard can, and games were never tested against it. Some glitch badly
-     * (speedrunners exploit it in A Link to the Past), so opposite directions held together
-     * cancel out here.
+     * (speedrunners exploit this, for example to clip through walls), so opposite directions
+     * held together cancel out here.
      */
     public void setPressed(int port, int buttons) {
         if ((buttons & (BUTTON_LEFT | BUTTON_RIGHT)) == (BUTTON_LEFT | BUTTON_RIGHT)) {
