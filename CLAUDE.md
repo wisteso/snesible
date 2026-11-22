@@ -32,8 +32,9 @@ Read these before working on the project:
 - Verify with evidence: run the test suites, and use the headless `--run`, `--screenshot` and
   `--record-audio` modes (read PNGs with the Read tool). Don't claim a fix without checking it.
 - **Don't commit automatically**: the user reviews changes first. When a milestone is done, offer
-  the commit and make it only when asked, with the `Co-Authored-By` trailer. Never commit `roms/`,
-  `testdata/`, `.srm` files or `gamepad.properties` (all git-ignored).
+  the commit and make it only when asked. Match the user's commit style ("- " bullet sentences
+  ending in a period). 
+- Never commit `roms/`, `testdata/`, `.srm` files or `gamepad.properties` (all git-ignored).
 - Don't embed copyrighted console code (the APU boot ROM is a clean-room replacement).
 - **Never name a game in the docs** (`.md` files): refer to ROMs generically, by the hardware
   and genre labels listed in `docs/development.md` ("the GSU-1 game", "the LoROM
