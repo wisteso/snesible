@@ -20,7 +20,7 @@ import snesible.ui.PacingMode;
 import snesible.ui.PlayOptions;
 import snesible.ui.Platform;
 import snesible.ui.ToolScreen;
-import snesible.ui.input.GamepadMapping;
+import snesible.ui.input.GamepadMappings;
 import snesible.ui.input.winmm.Gamepads;
 import snesible.ui.lwjgl.LwjglWindow;
 import snesible.ui.swing.SwingWindow;
@@ -65,7 +65,7 @@ public class Main {
             if (!winmm) {
                 requireFirstThreadOnMac(); // without --swing the test reads pads through GLFW
             }
-            GamepadTest.run(GamepadMapping.load(GAMEPAD_MAPPING_FILE), winmm);
+            GamepadTest.run(GamepadMappings.load(GAMEPAD_MAPPING_FILE), winmm);
             return;
         }
         if (args.length >= 2 && args[0].equals("--info")) {
@@ -168,7 +168,7 @@ public class Main {
         String title = cart.header().title();
         Path saveFile = cart.header().hasBattery() ? Cartridge.saveFileFor(romFile) : null;
         System.out.println(Controls.HELP);
-        GamepadMapping mapping = GamepadMapping.load(GAMEPAD_MAPPING_FILE);
+        GamepadMappings mappings = GamepadMappings.load(GAMEPAD_MAPPING_FILE);
 
         if (!swing) {
             requireFirstThreadOnMac();
@@ -184,12 +184,12 @@ public class Main {
             }
             if (window != null) {
                 Snes snes = createSnes(cart);
-                window.play(snes, saveFile, mapping, createToolScreen(snes)); // returns when closed
+                window.play(snes, saveFile, mappings, createToolScreen(snes)); // returns when closed
                 return;
             }
         }
         // The Swing window reads gamepads through Windows' winmm (none elsewhere, for now).
-        Gamepads gamepads = Gamepads.open(mapping).orElse(null);
+        Gamepads gamepads = Gamepads.open(mappings).orElse(null);
         List<InputSource> gamepadInputs = gamepads == null ? List.of() : List.of(gamepads);
         Runnable rescan = gamepads == null ? null : gamepads::requestRescan;
         Snes snes = createSnes(cart);

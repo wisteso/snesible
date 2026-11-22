@@ -1,12 +1,9 @@
 package snesible.ui.input;
 
 import java.io.IOException;
-import java.io.Reader;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Properties;
 import snesible.core.cpu.io.JoypadPorts;
 
 /**
@@ -14,15 +11,13 @@ import snesible.core.cpu.io.JoypadPorts;
  *
  * <p>PC gamepads number their buttons however their maker chose, so the face buttons need a
  * mapping. The default assumes the device numbers its buttons in the order SNES-style pads
- * usually do (A, B, X, Y, L, R, Select, Start). Different pads can be configured with a
- * properties file of SNES button names and device button numbers, as
- * {@code --gamepad-test} shows them:
- * <pre>
- *   A=0
- *   B=1
- *   START=7
- * </pre>
- * The D-pad needs no mapping: it's read from the X/Y axes or the hat switch, whichever the
+ * usually do (A, B, X, Y, L, R, Select, Start). Lines of {@code gamepad.properties} change it
+ * ({@link #set}): an SNES button name and the device button numbers {@code --gamepad-test}
+ * shows, such as {@code START=7}, or {@code L=5,6,8} for a pad with more shoulder buttons (or
+ * paddles) than the SNES has, any of which presses it. {@link GamepadMappings} reads the file
+ * and picks the mapping for each model of pad.
+ *
+ * <p>The D-pad needs no mapping: it's read from the X/Y axes or the hat switch, whichever the
  * device has.
  */
 public final class GamepadMapping {
@@ -44,8 +39,11 @@ public final class GamepadMapping {
         SNES_BUTTONS.put("START", JoypadPorts.BUTTON_START);
     }
 
+    /** How many device buttons a mapping covers: the 32 bits of {@link JoystickState#buttons}. */
+    private static final int DEVICE_BUTTONS = 32;
+
     /** Device button number to SNES button bit, indexed by device button (0-31). */
-    private final int[] deviceButtonToSnes = new int[32];
+    private final int[] deviceButtonToSnes = new int[DEVICE_BUTTONS];
 
     /** The default mapping: device buttons 0-7 are A, B, X, Y, L, R, Select, Start. */
     public GamepadMapping() {
@@ -56,43 +54,50 @@ public final class GamepadMapping {
     }
 
     /**
-     * The default mapping with overrides from {@code file}, if it exists. Each line maps an SNES
-     * button name to a device button number.
+     * Applies one line of {@code gamepad.properties}: {@code name} is an SNES button name (any
+     * case), {@code value} one device button number or several separated by commas. The SNES
+     * button loses whatever device buttons it had before (its default included), so a line
+     * replaces rather than adds to the mapping it's applied to.
+     *
+     * @param where the file and line, for error messages
+     * @throws IOException if the name or a number is wrong
      */
-    public static GamepadMapping load(Path file) throws IOException {
-        GamepadMapping mapping = new GamepadMapping();
-        if (!Files.isRegularFile(file)) {
-            return mapping;
+    void set(String name, String value, String where) throws IOException {
+        Integer snesButton = SNES_BUTTONS.get(name.trim().toUpperCase(Locale.ROOT));
+        if (snesButton == null) {
+            throw new IOException(where + ": unknown SNES button '" + name.trim()
+                    + "' (the names are " + String.join(", ", SNES_BUTTONS.keySet()) + ")");
         }
-        Properties properties = new Properties();
-        try (Reader reader = Files.newBufferedReader(file)) {
-            properties.load(reader);
-        }
-        for (String name : properties.stringPropertyNames()) {
-            Integer snesButton = SNES_BUTTONS.get(name.trim().toUpperCase());
-            if (snesButton == null) {
-                throw new IOException(file + ": unknown SNES button '" + name + "'");
+        clear(snesButton);
+        for (String number : value.split(",")) {
+            int deviceButton;
+            try {
+                deviceButton = Integer.parseInt(number.trim());
+            } catch (NumberFormatException e) {
+                throw new IOException(where + ": '" + number.trim() + "' isn't a button number");
             }
-            int deviceButton = Integer.parseInt(properties.getProperty(name).trim());
-            mapping.assign(snesButton, deviceButton);
+            if (deviceButton < 0 || deviceButton >= DEVICE_BUTTONS) {
+                throw new IOException(where + ": button " + deviceButton + " is out of range 0-"
+                        + (DEVICE_BUTTONS - 1));
+            }
+            // Overwrites whatever the slot did before (another button's default, say).
+            deviceButtonToSnes[deviceButton] = snesButton;
         }
-        return mapping;
     }
 
-    /** Makes {@code deviceButton} produce {@code snesButton}, replacing earlier assignments. */
-    void assign(int snesButton, int deviceButton) {
+    /** Unmaps {@code snesButton} from every device button (its default included). */
+    private void clear(int snesButton) {
         for (int i = 0; i < deviceButtonToSnes.length; i++) {
             if (deviceButtonToSnes[i] == snesButton) {
                 deviceButtonToSnes[i] = 0;
             }
         }
-        deviceButtonToSnes[deviceButton] = snesButton;
     }
 
     /** The SNES buttons (as {@link JoypadPorts} bits) held according to {@code state}. */
     public int toSnesButtons(JoystickState state) {
         int snes = 0;
-        for (int deviceButton = 0; deviceButton < 32; deviceButton++) {
+        for (int deviceButton = 0; deviceButton < DEVICE_BUTTONS; deviceButton++) {
             if ((state.buttons() & (1 << deviceButton)) != 0) {
                 snes |= deviceButtonToSnes[deviceButton];
             }

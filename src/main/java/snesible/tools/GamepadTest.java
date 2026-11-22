@@ -6,14 +6,19 @@ import java.util.Map;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 import snesible.core.cpu.io.JoypadPorts;
+import snesible.ui.Platform;
 import snesible.ui.input.GamepadMapping;
+import snesible.ui.input.GamepadMappings;
 import snesible.ui.input.JoystickState;
+import snesible.ui.input.UsbId;
 import snesible.ui.input.winmm.WinmmJoysticks;
 import snesible.ui.lwjgl.GlfwJoysticks;
 
 /**
  * {@code --gamepad-test}: lists connected gamepads and prints every button press, so the right
- * button numbers can be put into {@code gamepad.properties}.
+ * button numbers can be put into {@code gamepad.properties}. It prints each pad's USB vendor and
+ * product, which name the pad's section of the file ({@link GamepadMappings}), and which
+ * section the tested pad uses.
  *
  * <p>The two windows read pads differently, and a pad's button numbers can differ between the
  * two, so the test reads them the way the chosen window does:
@@ -40,9 +45,9 @@ public final class GamepadTest {
     /**
      * @param winmm read pads through winmm (the Swing window's way) instead of GLFW
      */
-    public static void run(GamepadMapping mapping, boolean winmm) throws InterruptedException {
+    public static void run(GamepadMappings mappings, boolean winmm) throws InterruptedException {
         if (winmm) {
-            runWinmm(mapping);
+            runWinmm(mappings);
             return;
         }
         GlfwJoysticks glfw;
@@ -58,11 +63,11 @@ public final class GamepadTest {
             return;
         }
         try (glfw) {
-            runGlfw(glfw, mapping);
+            runGlfw(glfw, mappings);
         }
     }
 
-    private static void runGlfw(GlfwJoysticks glfw, GamepadMapping mapping) throws InterruptedException {
+    private static void runGlfw(GlfwJoysticks glfw, GamepadMappings mappings) throws InterruptedException {
         System.out.println("Reading gamepads through GLFW, as the OpenGL window does (--swing: as the Swing window does).");
         List<Integer> ids = glfw.connected();
         if (ids.isEmpty()) {
@@ -80,15 +85,16 @@ public final class GamepadTest {
             System.out.println("This pad is mapped by position (bottom face button = SNES B, right = A, left = Y, top = X);");
             System.out.println("gamepad.properties doesn't apply to it. Device button numbers are shown for reference.");
         } else {
-            System.out.println("Device button numbers are what gamepad.properties uses, e.g. START=7.");
+            printSection(GlfwJoysticks.usbId(jid), mappings);
         }
+        GamepadMapping mapping = mappings.forDevice(GlfwJoysticks.usbId(jid));
         watch(() -> {
             glfw.pollEvents();
             return GlfwJoysticks.rawState(jid);
         }, state -> standard ? glfw.standardLayoutButtons(jid) : mapping.toSnesButtons(state));
     }
 
-    private static void runWinmm(GamepadMapping mapping) throws InterruptedException {
+    private static void runWinmm(GamepadMappings mappings) throws InterruptedException {
         System.out.println("Reading gamepads through winmm, as the Swing window does (without --swing: as the OpenGL window does).");
         WinmmJoysticks api = WinmmJoysticks.open().orElse(null);
         if (api == null) {
@@ -107,8 +113,19 @@ public final class GamepadTest {
         WinmmJoysticks.DeviceInfo device = devices.get(0);
         System.out.println();
         System.out.println("Testing joystick " + device.id() + ". Press buttons; Ctrl+C to stop.");
+        UsbId id = WinmmJoysticks.usbId(device);
+        printSection(id, mappings);
+        watch(() -> api.poll(device), mappings.forDevice(id)::toSnesButtons);
+    }
+
+    /** Says how to write this pad's own mapping, and which mapping it uses now. */
+    private static void printSection(UsbId id, GamepadMappings mappings) {
         System.out.println("Device button numbers are what gamepad.properties uses, e.g. START=7.");
-        watch(() -> api.poll(device), mapping::toSnesButtons);
+        if (id != null) {
+            System.out.println("To map this model of pad only, put its lines under [" + id + "] (every system)");
+            System.out.println("or [" + id + " " + Platform.shortName() + "] (this system only).");
+        }
+        System.out.println("Now using " + mappings.describe(id) + ".");
     }
 
     /**

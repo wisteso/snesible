@@ -221,6 +221,19 @@ saved position and size. `toggleFullscreen(Fullscreen kind)` tracks the state in
   - Otherwise the raw path: buttons as bits, axes 0/1 as X/Y and hat 0 as degrees (via
     `hatDegrees`) go into `JoystickState`, then `GamepadMapping.toSnesButtons`. That's the
     same mapping class and file the winmm reader uses.
+  - **Mappings are per model of pad.** `gamepad.properties` can have `[vendor:product]`
+    sections and `[vendor:product mac|windows|linux]` ones applied on top, on that system
+    only (`GamepadMappings`). The numbers come from the GLFW GUID (`UsbId.fromSdlGuid`: SDL's
+    format, little-endian words 2 and 4) or winmm's `wMid`/`wPid`. Both gave `0583:2060` for
+    the Buffalo pad. Each reader picks a pad's mapping when it connects. A pad without a
+    section gets the lines before the first section. A section replaces those lines rather
+    than adding to them, because they're usually for a different pad. Drivers on different
+    systems can number one pad's buttons differently, which is why the system sections exist.
+  - **A pad in a Switch-protocol mode reads as noise.** On macOS, a pad with paddles in its
+    Switch modes (S and S/X) showed up as Nintendo's Switch Pro controller (`057e:2009`), not
+    in the database. Its idle state had buttons 1-7 counting (a timer byte), 12-16 stuck on
+    and both axes at -1. That protocol needs a USB handshake that Steam and SDL send and
+    GLFW doesn't. Its D mode is a plain HID pad and works through a section.
 - **The user's Buffalo SNES pad (USB 0583:2060)** shows up in GLFW as
   "USB,2-axis 8-button gamepad": 8 buttons, 2 axes, no hats, not in the database. It takes
   the raw path with the default mapping (device buttons 0-7 = A, B, X, Y, L, R, Select,
@@ -358,6 +371,8 @@ with scanlines on and off, over frames 1-3 (all burst phases).
 ### `--gamepad-test` (`snesible.tools.GamepadTest`)
 - It lists the pads and prints every change of the first pad's raw state (button numbers,
   axes, hat) next to the SNES buttons it maps to. Use it to write `gamepad.properties`.
+  It prints each pad's USB numbers and, for a raw pad, the section names to use and which
+  mapping it's using now.
 - **It reads pads the way the chosen window does**, because the two readers could number
   buttons differently:
   - By default it reads through GLFW, like the OpenGL window, via `snesible.ui.lwjgl.GlfwJoysticks`
@@ -525,7 +540,7 @@ top-down row convention described in section 4.
   | `PacingDecisionTest` | 60/59.94/120/144 Hz, PAL, broken vsync, refused forced vsync |
   | `AudioResamplerTest` | the resampler |
   | `GlfwGamepadsTest` | standard layout, triggers, stick, hats; uses `GLFWGamepadState.create()`, so no pad or window needed |
-  | `GamepadMappingTest` | the button mapping |
+  | `GamepadMappingTest`, `GamepadMappingsTest`, `UsbIdTest` | the button mapping; file sections per pad and system; GUID parsing |
   | `CoreBoundaryTest` | `snesible.core` imports |
 
   Surefire runs with `--enable-native-access=ALL-UNNAMED` (pom `argLine`). The whole suite

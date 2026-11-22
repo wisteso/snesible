@@ -1,11 +1,15 @@
 package snesible.ui.input.winmm;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import snesible.ui.InputSource;
 import snesible.ui.input.GamepadMapping;
+import snesible.ui.input.GamepadMappings;
 import snesible.ui.input.JoystickState;
+import snesible.ui.input.UsbId;
 
 /**
  * The connected gamepads, polled once per frame.
@@ -32,15 +36,20 @@ public final class Gamepads implements InputSource {
     private static final int MAX_PLAYERS = 2;
 
     private final WinmmJoysticks api;
-    private final GamepadMapping mapping;
+    private final GamepadMappings mappings;
+    /**
+     * Each pad's mapping, by winmm joystick id: the {@code gamepad.properties} section for its
+     * USB vendor and product (which winmm reports), chosen when the pad is found.
+     */
+    private final Map<Integer, GamepadMapping> mappingById = new HashMap<>();
     /** The pads in use, in player order. Only the emulation thread touches this list. */
     private final List<WinmmJoysticks.DeviceInfo> devices = new ArrayList<>();
     /** Set by the user interface; the next {@link #poll} looks for new pads. */
     private volatile boolean rescanRequested;
 
-    private Gamepads(WinmmJoysticks api, GamepadMapping mapping) {
+    private Gamepads(WinmmJoysticks api, GamepadMappings mappings) {
         this.api = api;
-        this.mapping = mapping;
+        this.mappings = mappings;
     }
 
     /**
@@ -48,9 +57,9 @@ public final class Gamepads implements InputSource {
      * pads right away (slow, but before the game starts), so pads that are already plugged in
      * work from the first frame.
      */
-    public static Optional<Gamepads> open(GamepadMapping mapping) {
+    public static Optional<Gamepads> open(GamepadMappings mappings) {
         return WinmmJoysticks.open().map(api -> {
-            Gamepads gamepads = new Gamepads(api, mapping);
+            Gamepads gamepads = new Gamepads(api, mappings);
             gamepads.rescan();
             return gamepads;
         });
@@ -83,11 +92,12 @@ public final class Gamepads implements InputSource {
             if (state == null) {
                 System.out.println("Gamepad disconnected: " + devices.get(i).name()
                         + " (press F9 to look for pads again after reconnecting)");
+                mappingById.remove(devices.get(i).id());
                 devices.remove(i--);
                 continue;
             }
             if (i < buttonsPerPlayer.length) {
-                buttonsPerPlayer[i] = mapping.toSnesButtons(state);
+                buttonsPerPlayer[i] = mappingById.get(devices.get(i).id()).toSnesButtons(state);
             }
         }
     }
@@ -98,9 +108,11 @@ public final class Gamepads implements InputSource {
         for (WinmmJoysticks.DeviceInfo found : api.findDevices()) {
             boolean known = devices.stream().anyMatch(d -> d.id() == found.id());
             if (!known && devices.size() < MAX_PLAYERS) {
+                UsbId id = WinmmJoysticks.usbId(found);
                 devices.add(found);
-                System.out.printf("Gamepad connected as controller %d: %s (USB %04X:%04X, %d buttons)%n",
-                        devices.size(), found.name(), found.vendorId(), found.productId(), found.buttonCount());
+                mappingById.put(found.id(), mappings.forDevice(id));
+                System.out.printf("Gamepad connected as controller %d: %s (USB %s, %d buttons, %s)%n",
+                        devices.size(), found.name(), id, found.buttonCount(), mappings.describe(id));
             }
         }
         if (devices.size() == before) {

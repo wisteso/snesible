@@ -3,11 +3,15 @@ package snesible.ui.lwjgl;
 import static org.lwjgl.glfw.GLFW.*;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import snesible.core.cpu.io.JoypadPorts;
 import snesible.ui.InputSource;
 import snesible.ui.input.GamepadMapping;
+import snesible.ui.input.GamepadMappings;
 import snesible.ui.input.JoystickState;
+import snesible.ui.input.UsbId;
 import org.lwjgl.glfw.GLFWGamepadState;
 import org.lwjgl.glfw.GLFWJoystickCallback;
 
@@ -27,8 +31,9 @@ import org.lwjgl.glfw.GLFWJoystickCallback;
  *       face button is the SNES B, right is A, left is Y, top is X, as on the SNES's own
  *       diamond.</li>
  *   <li><b>Other joysticks</b> (the user's Buffalo SNES pad is one): their raw buttons, axes
- *       and hat go through {@link GamepadMapping}, the same mapping and
- *       {@code gamepad.properties} file the winmm reader uses.</li>
+ *       and hat go through a {@link GamepadMapping}, from the same {@code gamepad.properties}
+ *       file the winmm reader uses: the section for the pad's USB vendor and product, which
+ *       GLFW's joystick GUID contains, or the lines for other pads.</li>
  * </ul>
  * GLFW must be used from the main thread, which is also where the OpenGL window polls input.
  */
@@ -38,15 +43,17 @@ final class GlfwGamepads implements InputSource {
     /** Stick or trigger deflection beyond which it counts as pressed. */
     private static final float THRESHOLD = 0.5f;
 
-    private final GamepadMapping mapping;
+    private final GamepadMappings mappings;
+    /** Each raw pad's mapping, by GLFW joystick id, chosen when it's connected. */
+    private final Map<Integer, GamepadMapping> mappingByJid = new HashMap<>();
     /** GLFW joystick ids, in player order. */
     private final List<Integer> players = new ArrayList<>();
     private final GLFWGamepadState gamepadState = GLFWGamepadState.create();
     private final GLFWJoystickCallback callback;
 
     /** Finds the pads already plugged in and starts listening for changes. Needs GLFW running. */
-    GlfwGamepads(GamepadMapping mapping) {
-        this.mapping = mapping;
+    GlfwGamepads(GamepadMappings mappings) {
+        this.mappings = mappings;
         for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; jid++) {
             if (glfwJoystickPresent(jid)) {
                 connected(jid);
@@ -82,9 +89,11 @@ final class GlfwGamepads implements InputSource {
         if (players.contains(jid)) {
             return;
         }
+        UsbId id = GlfwJoysticks.usbId(jid);
+        mappingByJid.put(jid, mappings.forDevice(id));
         String how = glfwJoystickIsGamepad(jid)
                 ? "standard layout, \"" + glfwGetGamepadName(jid) + "\""
-                : "raw buttons through the gamepad mapping";
+                : "USB " + (id == null ? "id unknown" : id) + ", raw buttons through " + mappings.describe(id);
         if (players.size() < MAX_PLAYERS) {
             players.add(jid);
             System.out.printf("Gamepad connected as controller %d: %s (%s)%n",
@@ -98,6 +107,7 @@ final class GlfwGamepads implements InputSource {
         int index = players.indexOf(jid);
         if (index >= 0) {
             players.remove(index);
+            mappingByJid.remove(jid);
             System.out.printf("Gamepad disconnected (was controller %d)%n", index + 1);
         }
     }
@@ -108,7 +118,8 @@ final class GlfwGamepads implements InputSource {
             return fromStandardLayout(gamepadState);
         }
         JoystickState state = GlfwJoysticks.rawState(jid);
-        return state == null ? 0 : mapping.toSnesButtons(state);
+        GamepadMapping mapping = mappingByJid.get(jid);
+        return state == null || mapping == null ? 0 : mapping.toSnesButtons(state);
     }
 
     /** A known gamepad: buttons by position, D-pad or left stick for directions. */

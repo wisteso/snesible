@@ -36,7 +36,7 @@ memory debugger (Milestone 9) sits beside them in `snesible.debug` (model, `Debu
 | `snesible.ui.audio`  | Sound output with dynamic rate control | `AudioOutput`, `AudioResampler` |
 | `snesible.ui.video`  | Turning PPU pixels into a picture: plain RGB, or the NTSC filter | `SnesColor`, `VideoFilter`, `VideoMode` |
 | `snesible.ui.video.ntsc` | Java port of Blargg's `snes_ntsc` (**LGPL 2.1+**, kept separate) | `SnesNtsc`, `NtscSetup` |
-| `snesible.ui.input`  | Gamepad button mapping, shared by every gamepad reader | `GamepadMapping`, `JoystickState` |
+| `snesible.ui.input`  | Gamepad button mapping, shared by every gamepad reader | `GamepadMapping`, `GamepadMappings` (the file, per model of pad), `UsbId`, `JoystickState` |
 | `snesible.ui.input.winmm` | Windows gamepads through winmm.dll for the Swing window (an `InputSource`; F9 rescans) | `Gamepads`, `WinmmJoysticks` |
 | `snesible.ui.swing`  | The Swing window (a `VideoSink`) and its keyboard; `--swing`, and the fallback | `SwingWindow`, `SwingKeyboard`, `SwingToolWindow` |
 | `snesible.ui.lwjgl`  | The OpenGL window (GLFW via LWJGL, the default): drawing (NTSC on the GPU), keyboard, gamepads, pacing to the display | `LwjglWindow`, `GlRenderer`, `GlfwKeyboard`, `GlfwGamepads`, `GlfwJoysticks`, `PacingDecision`, `GlfwToolWindow` |
@@ -182,7 +182,9 @@ field; the renderer crossfades over 5 ms. Details in `m11-audio-plan.md`.
 reports pads being plugged in or out, so nothing is ever searched for. Pads in SDL's
 controller database (bundled with GLFW) use their standard layout, mapped by position (bottom
 face button = SNES B, right = A, left = Y, top = X); others, like the user's Buffalo pad, go
-through `GamepadMapping` (`gamepad.properties`) as with winmm.
+through a `GamepadMapping` from `gamepad.properties` as with winmm. Each pad gets its own:
+`GamepadMappings.forDevice` picks the file's section for the pad's USB vendor and product
+(`UsbId`, from the GLFW GUID or winmm's `wMid`/`wPid`), else the lines for other pads.
 
 **Rendering (`GlRenderer`)**: sharp pixels upload the raw 19-bit PPU values into a `GL_R32UI`
 texture and `snes-pixels.frag` converts them with the same integer maths as `SnesColor`

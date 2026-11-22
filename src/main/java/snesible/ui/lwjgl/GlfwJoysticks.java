@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import snesible.ui.input.JoystickState;
+import snesible.ui.input.UsbId;
 import org.lwjgl.glfw.GLFWGamepadState;
 
 /**
@@ -55,10 +56,19 @@ public final class GlfwJoysticks implements AutoCloseable {
         String how = isGamepad(jid)
                 ? "known gamepad \"" + glfwGetGamepadName(jid) + "\": standard layout, by position"
                 : "not in GLFW's gamepad database: raw buttons through gamepad.properties";
-        return String.format("Joystick %d: %s  (%d buttons, %d axes, %d hats; GUID %s)%n    %s",
-                jid, glfwGetJoystickName(jid).trim(),
+        UsbId id = usbId(jid);
+        return String.format("Joystick %d: %s  USB %s  (%d buttons, %d axes, %d hats; GUID %s)%n    %s",
+                jid, glfwGetJoystickName(jid).trim(), id == null ? "id unknown" : id,
                 buttons == null ? 0 : buttons.limit(), axes == null ? 0 : axes.limit(),
                 hats == null ? 0 : hats.limit(), glfwGetJoystickGUID(jid), how);
+    }
+
+    /**
+     * The pad's USB vendor and product, read from its GLFW GUID, or null if the GUID doesn't
+     * carry them ({@link UsbId#fromSdlGuid}).
+     */
+    public static UsbId usbId(int jid) {
+        return UsbId.fromSdlGuid(glfwGetJoystickGUID(jid));
     }
 
     /**

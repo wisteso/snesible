@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import snesible.ui.Platform;
 import snesible.ui.input.JoystickState;
+import snesible.ui.input.UsbId;
 
 /**
  * Reads gamepads through Windows' original joystick API in {@code winmm.dll}.
@@ -65,6 +66,14 @@ public final class WinmmJoysticks {
     private static final int HAS_POV = 0x10;
 
     /** What we learn about a device once, when it's found. */
+    /**
+     * A pad's USB vendor and product. winmm calls them the manufacturer and product ids
+     * ({@code wMid}, {@code wPid}); for a USB pad Windows fills them with the USB numbers.
+     */
+    public static UsbId usbId(DeviceInfo device) {
+        return new UsbId(device.vendorId(), device.productId());
+    }
+
     public record DeviceInfo(int id, String name, int vendorId, int productId, int buttonCount,
                              boolean hasPov, int xMin, int xMax, int yMin, int yMax) {
     }

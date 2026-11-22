@@ -31,7 +31,10 @@ failure details.
   stored as gzip (`*.json.gz`, about 470 MB). Fetch with
   `powershell -ExecutionPolicy Bypass -File scripts/download-cpu-tests.ps1`. Note: curl config
   files need forward slashes in paths (backslashes are escapes).
-- `gamepad.properties` (optional, per machine): SNES button name to device button number.
+- `gamepad.properties` (optional, per machine): SNES button name to device button number,
+  or several numbers separated by commas (`L=5,6,8`; any of them presses it). Sections
+  `[vendor:product]` and `[vendor:product mac|windows|linux]` map one model of pad
+  (`GamepadMappings`); lines before the first section are for every other pad.
 
 ## Test suites
 
@@ -55,7 +58,7 @@ failure details.
 | `ObservableTest` | with no observer installed, every `Observable.wrapXxx` returns its argument |
 | `MemoryObserverTest` | the memory debugger's recording: fetch vs read, DMA through the VRAM port, APU RAM under the registers, watching changes nothing |
 | `VideoFilterTest` | sharp-pixel conversion; NTSC filter: size, flat colors, composite vs S-Video artifacts, burst phase per line and frame, scanlines, brightness |
-| `ArithmeticUnitTest`, `JoypadPortsTest`, `GamepadMappingTest` | small units |
+| `ArithmeticUnitTest`, `JoypadPortsTest`, `GamepadMappingTest`, `GamepadMappingsTest`, `UsbIdTest` | small units |
 
 The total is about 932 tests, taking about 10 s.
 

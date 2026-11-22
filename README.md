@@ -45,9 +45,12 @@ pads GLFW knows (Xbox, PlayStation, Switch Pro, ...) use their standard layout, 
 The Swing window reads them through Windows' winmm only, finds them at startup, and looks
 for newly plugged-in ones when you press F9 (each search stalls the game briefly). If the face buttons are mixed up, run `--gamepad-test` (add `--swing`
 for the Swing window), press each button to see its number, and put the numbers in a `gamepad.properties` file in the working
-directory:
+directory. The test also prints the pad's USB vendor and product (`USB 2dc8:6009`): a section
+with those numbers maps that model of pad only, so one file can hold every pad you use.
+Lines before the first section are for all other pads.
 
 ```properties
+# Pads without a section of their own
 A=0
 B=1
 X=2
@@ -56,7 +59,25 @@ L=4
 R=5
 SELECT=6
 START=7
+
+[2dc8:6009]
+# A pad with paddles: several device buttons can press one SNES button
+A=0
+B=1
+X=3
+Y=4
+L=5,6,8
+R=2,7,9
+SELECT=10
+START=11
+
+[2dc8:6009 windows]
+# Added on top of [2dc8:6009], on Windows only (also: mac, linux)
+SELECT=12
 ```
+
+Systems can number one pad's buttons differently, which is what the `windows`, `mac` and
+`linux` sections are for.
 
 Games with battery-backed saves keep them in a `.srm` file next to the ROM.
 

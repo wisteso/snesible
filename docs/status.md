@@ -88,6 +88,11 @@ Each is documented where it lives in the code.
   detected as controller 1, and the user confirmed its buttons are right in the OpenGL
   window. `--gamepad-test` reads pads as the OpenGL window does (GLFW); with `--swing`, as
   the Swing window does (winmm).
+- `gamepad.properties` maps each model of pad by its USB vendor and product
+  (`[2dc8:6009]`, plus `[2dc8:6009 mac]` and so on for one system), and one SNES button can
+  have several device buttons (`L=5,6,8`). Added for a pad with paddles on macOS, which works
+  in its D mode. Its Switch modes read as noise through GLFW (`frontend.md`). The user's
+  mapping from macOS is in the tests. The sections haven't been tried on the Mac yet.
 - Optional future features (the user's list, not planned): a CRT shadow mask, 4:3 pixels
   in sharp mode, adjustable NTSC settings. Screen curvature was declined. Details in
   `frontend.md`, section 8.

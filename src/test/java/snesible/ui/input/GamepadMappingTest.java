@@ -4,11 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import snesible.core.cpu.io.JoypadPorts;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 class GamepadMappingTest {
 
@@ -39,30 +36,21 @@ class GamepadMappingTest {
     }
 
     @Test
-    void propertiesFileOverridesDefaults(@TempDir Path dir) throws IOException {
-        Path file = dir.resolve("gamepad.properties");
-        Files.writeString(file, "A=1\nB=0\n");
-
-        GamepadMapping mapping = GamepadMapping.load(file);
+    void aLineReplacesTheButtonsDefault() throws IOException {
+        GamepadMapping mapping = new GamepadMapping();
+        mapping.set("a", "1", "test");
 
         assertEquals(JoypadPorts.BUTTON_A, mapping.toSnesButtons(buttons(1)));
-        assertEquals(JoypadPorts.BUTTON_B, mapping.toSnesButtons(buttons(0)));
+        assertEquals(0, mapping.toSnesButtons(buttons(0)), "A's default button is unmapped");
         assertEquals(JoypadPorts.BUTTON_START, mapping.toSnesButtons(buttons(7)), "others unchanged");
     }
 
     @Test
-    void unknownButtonNameIsReported(@TempDir Path dir) throws IOException {
-        Path file = dir.resolve("gamepad.properties");
-        Files.writeString(file, "TURBO=3\n");
-
-        assertThrows(IOException.class, () -> GamepadMapping.load(file));
-    }
-
-    @Test
-    void missingFileMeansDefaults(@TempDir Path dir) throws IOException {
-        GamepadMapping mapping = GamepadMapping.load(dir.resolve("absent.properties"));
-
-        assertEquals(JoypadPorts.BUTTON_A, mapping.toSnesButtons(buttons(0)));
+    void badLinesAreReported() {
+        GamepadMapping mapping = new GamepadMapping();
+        assertThrows(IOException.class, () -> mapping.set("TURBO", "3", "test"));
+        assertThrows(IOException.class, () -> mapping.set("L", "5,x", "test"));
+        assertThrows(IOException.class, () -> mapping.set("L", "32", "test"));
     }
 
     private static JoystickState buttons(int... numbers) {

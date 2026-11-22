@@ -17,7 +17,7 @@ import snesible.ui.Platform;
 import snesible.ui.PlayOptions;
 import snesible.ui.ToolScreen;
 import snesible.ui.VideoSink;
-import snesible.ui.input.GamepadMapping;
+import snesible.ui.input.GamepadMappings;
 import snesible.ui.video.VideoMode;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.glfw.Callbacks;
@@ -151,20 +151,20 @@ public final class LwjglWindow implements VideoSink {
      * Controller 1 is the keyboard plus the first gamepad; controller 2 the second gamepad.
      *
      * @param saveFile where battery-backed SRAM is kept, or null
-     * @param mapping  button mapping for gamepads that aren't in GLFW's gamepad database
+     * @param mappings button mappings for gamepads that aren't in GLFW's gamepad database
      */
-    public void play(Snes snes, Path saveFile, GamepadMapping mapping) {
-        play(snes, saveFile, mapping, null);
+    public void play(Snes snes, Path saveFile, GamepadMappings mappings) {
+        play(snes, saveFile, mappings, null);
     }
 
     /**
-     * Plays the game as {@link #play(Snes, Path, GamepadMapping)}, with a tool screen (the
+     * Plays the game as {@link #play(Snes, Path, GamepadMappings)}, with a tool screen (the
      * memory debugger) in a second window beside it, updated after every frame.
      *
      * @param toolScreen the screen for the second window, or null for none
      */
-    public void play(Snes snes, Path saveFile, GamepadMapping mapping, ToolScreen toolScreen) {
-        GlfwGamepads gamepads = new GlfwGamepads(mapping);
+    public void play(Snes snes, Path saveFile, GamepadMappings mappings, ToolScreen toolScreen) {
+        GlfwGamepads gamepads = new GlfwGamepads(mappings);
         List<InputSource> inputs = List.of(keyboard, gamepads);
         EmulationSession session = new EmulationSession(snes, saveFile, this, inputs);
         session.setPrintStats(options.stats());
