@@ -9,7 +9,9 @@ import snesible.core.apu.DspState;
  * <h2>Following the DSP</h2>
  * After every DSP sample, {@link #capture} looks at the voice's ring of 12 decoded samples. If
  * the ring moved on, the DSP decoded 4 new BRR samples, and they're copied into a longer history
- * here (128 samples, enough for the widest anti-aliasing kernel). The renderer never decodes BRR
+ * here. It holds 1024 samples: enough for the widest anti-aliasing kernel, plus everything a
+ * voice can play while the output is delayed (see {@link EnhancedRenderer}), even at the
+ * highest pitches. The renderer never decodes BRR
  * itself, so it can't disagree with the DSP about loop points, sample ends or BRR's filters.
  *
  * <p>The history is indexed by absolute sample number: {@code written} counts every sample ever
@@ -34,7 +36,7 @@ import snesible.core.apu.DspState;
  */
 final class EnhancedVoice {
 
-    private static final int HISTORY_SIZE = 128;
+    private static final int HISTORY_SIZE = 1024;
     private static final int HISTORY_MASK = HISTORY_SIZE - 1;
 
     /** De-click: how long a cut-off sound fades out, in samples (2 ms). */
@@ -134,18 +136,17 @@ final class EnhancedVoice {
     /**
      * Adds this voice's sound for queue entry {@code slot} to {@code mix} {left, right}.
      *
-     * @param table        the interpolator's weights (unused for the Gaussian)
      * @param antiAliasing stretch the kernel when the voice plays faster than recorded
      * @param surroundFix  use the size of each volume and ignore its sign
      * @param declick      fade out sounds that the hardware cuts off at once
      */
-    void mixInto(float[] mix, int slot, Interpolator interpolator, KernelTable table, DspState dsp,
+    void mixInto(float[] mix, int slot, Interpolator interpolator, DspState dsp,
                  boolean antiAliasing, boolean surroundFix, boolean declick) {
         float left = 0;
         float right = 0;
         boolean sounding = !silent[slot] && envelope[slot] != 0;
         if (sounding) {
-            float sample = noise[slot] ? noiseValue[slot] : interpolate(slot, interpolator, table, dsp, antiAliasing);
+            float sample = noise[slot] ? noiseValue[slot] : interpolate(slot, interpolator, dsp, antiAliasing);
             // The hardware's envelope multiply is (sample × envelope) >> 11, and each volume
             // is a signed 8-bit multiplier >> 7. Here they're the same, without the rounding.
             float amplitude = sample * envelope[slot] / 2048f;
@@ -197,7 +198,7 @@ final class EnhancedVoice {
     }
 
     /** The voice's sample value at queue entry {@code slot}'s position. */
-    float interpolate(int slot, Interpolator interpolator, KernelTable table, DspState dsp, boolean antiAliasing) {
+    float interpolate(int slot, Interpolator interpolator, DspState dsp, boolean antiAliasing) {
         if (interpolator == Interpolator.GAUSSIAN) {
             // The hardware's taps are the sample before the output position's whole sample, it,
             // and the two after. The table has 256 steps, so the fraction's top 8 bits pick one.
@@ -209,7 +210,8 @@ final class EnhancedVoice {
             return sum / 2048f;
         }
         int band = antiAliasing ? KernelTable.bandFor(step[slot]) : 0;
-        return table.interpolate(history, HISTORY_MASK, index[slot], fraction[slot], band);
+        return interpolator.table().interpolate(history, HISTORY_MASK, index[slot], fraction[slot], band,
+                written - 1);
     }
 
     private void addFromRing(DspState dsp, int start) {

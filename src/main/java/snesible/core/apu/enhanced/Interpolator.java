@@ -11,10 +11,17 @@ package snesible.core.apu.enhanced;
  *   <li>{@link #GAUSSIAN}: the hardware's own 4-point curve, a gentle low-pass filter. It's used
  *       to check that the renderer matches the DSP, not as a preset.</li>
  *   <li>{@link #CUBIC}: a 4-point Catmull-Rom spline. It passes through every stored sample and
- *       keeps much more treble than the Gaussian, without sinc's sharpness.</li>
- *   <li>{@link #SINC}: 8 points of the ideal band-limiting curve (sin(πx)/πx), tapered at its ends
- *       by a Kaiser window. It keeps the most treble.</li>
+ *       keeps much more treble than the Gaussian, but lets more aliasing through than the sinc.</li>
+ *   <li>{@link #SINC}: 16 points of the ideal band-limiting curve (sin(πx)/πx), tapered at its
+ *       ends by a Kaiser window. It keeps nearly all of a sample's treble (within 0.2 dB up to
+ *       80% of the way to the sample's highest frequency) and blocks the mirror images that
+ *       resampling makes (by 33 dB just above that frequency, 76 dB further up). Eight points
+ *       would lose 1.4 dB of that treble and block the images by only 16 dB.</li>
+ *   <li>{@link #SINC_8}: the first, 8-point version of the sinc, kept for comparing by ear.</li>
+ *   <li>{@link #SINC_MINIMUM_PHASE}: the 16-point sinc's frequency response, with all the ringing moved after
+ *       the output position, so nothing rings before a sharp attack ({@link MinimumPhase}).</li>
  * </ul>
+ * The tables for each are built the first time they're needed and then shared.
  */
 enum Interpolator {
 
@@ -40,24 +47,40 @@ enum Interpolator {
         }
     },
 
-    SINC(4) {
-        /** Kaiser's β: larger tapers harder, giving less leakage but a softer top end. */
-        private static final double BETA = 6.0;
-
+    SINC(8) {
         @Override
         double kernel(double x) {
-            if (Math.abs(x) >= 4) {
-                return 0;
-            }
-            double sinc = x == 0 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x);
-            double t = x / 4;
-            double window = besselI0(BETA * Math.sqrt(1 - t * t)) / besselI0(BETA);
-            return sinc * window;
+            return windowedSinc(x, radius, KAISER_BETA);
+        }
+    },
+
+    SINC_8(4) {
+        /** A shorter kernel needs a gentler window to keep its stopband: β 6 for 8 taps. */
+        @Override
+        double kernel(double x) {
+            return windowedSinc(x, radius, 6.0);
+        }
+    },
+
+    SINC_MINIMUM_PHASE(8) {
+        /** The linear-phase sinc it's made from; the table turns it into minimum phase. */
+        @Override
+        double kernel(double x) {
+            return windowedSinc(x, radius, KAISER_BETA);
         }
     };
 
+    /**
+     * Kaiser's β for the 16-point sinc: larger tapers harder, so less leaks through above the
+     * cut-off, but the top of the band rolls off sooner. 7 suits 16 taps: the images it lets
+     * through are below -75 dB once they're a little above the cut-off.
+     */
+    private static final double KAISER_BETA = 7.0;
+
     /** How far the kernel reaches on each side, in samples, before any stretching. */
     final int radius;
+
+    private KernelTable table;
 
     Interpolator(int radius) {
         this.radius = radius;
@@ -65,6 +88,26 @@ enum Interpolator {
 
     /** The kernel's height at distance {@code x} (in samples) from the output position. */
     abstract double kernel(double x);
+
+    /** This interpolator's precomputed weights (not for the Gaussian), built on first use. */
+    synchronized KernelTable table() {
+        if (table == null) {
+            table = this == SINC_MINIMUM_PHASE
+                    ? KernelTable.minimumPhase(new MinimumPhase(SINC))
+                    : KernelTable.linearPhase(this);
+        }
+        return table;
+    }
+
+    /** sin(πx)/πx, faded to zero at ±radius by a Kaiser window of the given β. */
+    private static double windowedSinc(double x, int radius, double beta) {
+        if (Math.abs(x) >= radius) {
+            return 0;
+        }
+        double sinc = x == 0 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x);
+        double t = x / radius;
+        return sinc * besselI0(beta * Math.sqrt(1 - t * t)) / besselI0(beta);
+    }
 
     /**
      * The modified Bessel function I0, which shapes the Kaiser window. Summing its power series

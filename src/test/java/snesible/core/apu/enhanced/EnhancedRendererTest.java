@@ -86,9 +86,9 @@ class EnhancedRendererTest {
         dsp.write(0x4C, 0x01);
         int previous = 0;
         int largest = 0;
-        for (int i = 0; i < 1200; i++) {
-            if (i == 300 || i == 600 || i == 900) {
-                renderer.cyclePreset(); // to sinc, to cubic, back to hardware
+        for (int i = 0; i < 300 * (AudioPreset.values().length + 1); i++) {
+            if (i % 300 == 0 && i > 0) {
+                renderer.cyclePreset(); // through every Quality preset and back to hardware
             }
             int left = next(renderer);
             if (i > 50) {
@@ -115,7 +115,7 @@ class EnhancedRendererTest {
 
     private boolean oppositeSigns(EnhancedRenderer renderer) {
         dsp.write(0x4C, 0x01);
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < EnhancedRenderer.DELAY + 100; i++) {
             next(renderer);
         }
         return Integer.signum(sample[0]) == -Integer.signum(sample[1]) && sample[0] != 0;

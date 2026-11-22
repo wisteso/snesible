@@ -1,6 +1,8 @@
 # Milestone 11 plan: enhanced audio (SNESamp-style)
 
-Status: **built** (2026-11-20); the user has listened to the recordings (see "After listening"). Added 2026-11-16 at the
+Status: **built** (2026-11-20); the user has listened to the recordings (see "After listening").
+On 2026-11-21 the sinc became 16-point and gained a minimum-phase variant (see "16-point and
+minimum-phase sinc"), not yet compared by ear. Added 2026-11-16 at the
 user's request; detailed and simplified with the user on 2026-11-20. The user's decisions: our
 own implementation (route C), Hardware as the default, F10 as the key, 32 kHz output, stereo
 width and surround fix kept, anti-aliasing always on. "Results" near the end has the
@@ -190,16 +192,19 @@ knowing the renderer exists.
 
 ### Look-ahead
 
-An 8-point kernel centred on the current position needs 4 samples ahead of it, and a stretched
-anti-aliasing kernel needs up to 16. The renderer therefore delays its whole output (every voice
-and the echo alike) by a fixed 16 ticks, 0.5 ms, which can't be heard. Each voice keeps a
-64-sample ring of decoded samples, enough for the widest kernel.
+The 16-point sinc reads 8 samples after the current position (up to 32 when stretched for
+anti-aliasing), but the DSP is sometimes only 6 ahead, and a slow voice decodes new samples
+slowly. The renderer therefore delays its whole output (every voice and the echo alike) by a
+fixed 96 ticks, 3 ms, enough for voices down to a pitch of $0100 (a sixteenth of the recorded
+speed); slower ones read their newest sample in place of the missing ones. Each voice keeps a
+1024-sample history, enough for the widest kernel plus what the voice plays during the delay.
+(With the first, 8-point sinc this was 4 ticks and a 128-sample history.)
 
 ## The options
 
 | Option | Values | Where it's set |
 |--------|--------|----------------|
-| Preset | Hardware (default), Quality (sinc), Quality (cubic) | F10 cycles them in that order (the new one is printed); `--audio hardware\|sinc\|cubic` sets the start |
+| Preset | Hardware (default), Quality (sinc, 8-point), Quality (sinc, 16-point), Quality (sinc, 16-point, minimum phase), Quality (cubic) | F10 cycles them in that order (the new one is printed); `--audio hardware\|sinc8\|sinc16\|minphase\|cubic` sets the start |
 | Stereo width | 0-200% (100% = as the game mixes it) | `--stereo-width` |
 | Surround fix | on / off | `--surround-fix` |
 
@@ -228,7 +233,8 @@ command-line flags in `PlayOptions`, like the existing ones.
 
 **11b. Cubic, sinc and anti-aliasing.**
 - Interpolators, as an enum: Gaussian (as hardware, needed for 11a's check), cubic (4-point
-  Catmull-Rom spline) and 8-point windowed sinc (Kaiser window).
+  Catmull-Rom spline) and windowed sinc (Kaiser window): 8 points at first, 16 since
+  2026-11-21, plus a minimum-phase version.
 - *Anti-aliasing:* when the pitch step is above 1, the sinc's cut-off is lowered to 1/step, which
   stretches the kernel to `8 × step` taps. The pitch register tops out at a step of about 4 (more
   with pitch modulation, where we cap the kernel at step 4). We precompute tables for 17 step
@@ -346,5 +352,56 @@ that. It runs on the emulation thread, as the DSP does now.
   default stays Hardware. F10 now goes Hardware, sinc, cubic (the user's order). The recordings
   fit the "tinny" impression: cubic has less energy than sinc at 4-12 kHz but more above
   12 kHz, where its weaker anti-aliasing lets more fold-back through.
-- Still open: Kaiser β for the sinc (6.0 now): lower keeps a little more top end, higher filters
-  harder.
+- Still open: the user asked (2026-11-21) to try techniques that avoid the sinc's pre-ringing;
+  see the next section. Kaiser β (7.0 now) could still be tuned: lower keeps a little more top
+  end, higher filters harder.
+
+## 16-point and minimum-phase sinc (2026-11-21)
+
+The user found "polyphase FIR filter banks with linear or cubic interpolation", "minimum-phase
+sinc" and "elliptic IIR resampling", and asked which we could borrow, especially to reduce the
+sinc's pre-ringing.
+
+- **Polyphase filter bank with linear interpolation:** already what `KernelTable` is (257 phases
+  per band, blended linearly). Nothing to add.
+- **A longer sinc:** the frequency response of the 8-point sinc (β 6) showed it was the weaker
+  point: -1.4 dB at 0.4 of a sample's rate, and resampling images only 16 dB down just above the
+  cut-off (0.6), which adds unwanted treble to low-rate samples. 16 points (β 7) gives -0.2 dB at
+  0.4, and images 33 dB down at 0.6 and 76 dB at 0.7. It replaces the 8-point sinc in the sinc
+  preset.
+- **Minimum-phase sinc:** a symmetric sinc rings before a sharp attack, for half its length in
+  the sample's own time (about 1 ms for a 16-point kernel and a drum stored at 8 kHz).
+  `MinimumPhase` turns the 16-point sinc into minimum phase (cepstrum method, with a small `Fft`),
+  keeping its frequency response exactly but moving all the ringing after the attack. Its delay
+  for low frequencies (1.95 samples) is cancelled by reading that far ahead, so voices stay in
+  time. It's the temporary preset "Quality (sinc, minimum phase)" (`--audio minphase`), to compare
+  with the plain sinc by ear; one of the two will probably go.
+- **After listening (2026-11-21):** the user can't hear a difference between minimum phase and the
+  plain 16-point sinc in the recordings. At their request the 8-point sinc is back as a temporary
+  preset too, "Quality (sinc, 8-point)" (`--audio sinc8`, β 6 as before), to compare 8 and 16
+  points in games.
+- **Later the same day:** the 16-point sinc isn't better overall; in some cases the 8-point sounds
+  better. The user will test all of them long term before any is cut. The presets were renamed to
+  say the length ("Quality (sinc, 16-point)", "Quality (sinc, 16-point, minimum phase)") and F10
+  now goes Hardware, 8-point, 16-point, 16-point minimum phase, cubic. The command-line name of
+  the 16-point sinc became `sinc16` (it was `sinc`).
+- **Elliptic IIR resampling:** not used. IIR filters work on a stream at a fixed rate, but each
+  voice changes pitch every sample and is read at arbitrary positions; a cut-off that follows the
+  pitch would need coefficients changing on the fly, can't be precomputed into tables, and
+  elliptic filters get their steepness from strong phase distortion near the cut-off. They would
+  suit converting the finished 32 kHz stream to 48 kHz, which this milestone doesn't do.
+
+Measured (tests and recordings):
+- **Before an attack** (a step in a sample): the symmetric sinc ripples for 6 samples, up to 13%
+  of the step; the minimum-phase sinc is exactly silent until 1.75 samples before it, then rises
+  without dipping. The cost: it overshoots more after the attack (127% of the step against 113%),
+  which is where its ringing went.
+- **Anti-aliasing:** the fold-back test's alias is at -80 / -106 dB (steps 2 and 4) with the
+  16-point sinc and -81 / -108 dB minimum-phase (8-point: -77 / -82 dB).
+- **Recordings** (`testdata/m11/`, the 8-point ones kept as `*-sinc8.wav`): the LoROM platformer
+  has 1.3 dB more at 4-8 kHz and 2.3 dB less above 12 kHz (less image leakage) than with the
+  8-point sinc. Minimum phase has the same spectrum, as it should.
+- **Cost:** 25 s of the GSU-2 game took 4.51 s with the 16-point sinc, 4.45 s minimum-phase,
+  4.33 s with Hardware.
+- **Tests:** 967 pass. New: no ringing before an attack, the sincs keep treble at 0.4, the
+  minimum-phase kernel's small look-ahead, and every test now covers both sincs.

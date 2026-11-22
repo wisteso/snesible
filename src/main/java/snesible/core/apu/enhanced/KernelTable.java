@@ -1,16 +1,19 @@
 package snesible.core.apu.enhanced;
 
+import java.util.function.DoubleUnaryOperator;
+
 /**
- * Precomputed weights for one {@link Interpolator}, including its anti-aliased versions.
+ * Precomputed weights for one {@link Interpolator}, including its anti-aliased versions: a
+ * polyphase filter bank.
  *
  * <h2>Anti-aliasing by stretching the kernel</h2>
  * When a voice plays a sample faster than it was recorded, each output sample steps over more
  * than one stored sample. Frequencies in the sample above the output's limit then can't be
  * reproduced, and a plain interpolator folds them back down as harsh, unrelated tones (aliasing).
  * The cure is to filter them out first. Stretching the kernel to {@code step} times its width
- * does exactly that: a kernel twice as wide only passes frequencies half as high. So for a
- * pitch step above 1 we use the kernel stretched by the step, which reads {@code 2 × radius ×
- * step} stored samples instead of {@code 2 × radius}. At a step of 1 or below nothing changes.
+ * does exactly that: a kernel twice as wide only passes frequencies half as high. So for a pitch
+ * step above 1 we use the kernel stretched by the step, which reads {@code step} times as many
+ * stored samples. At a step of 1 or below nothing changes.
  *
  * <h2>Bands</h2>
  * Computing kernels for every exact step would be slow, so there are 17 bands from step 1 to 4,
@@ -21,6 +24,12 @@ package snesible.core.apu.enhanced;
  * <h2>Phases</h2>
  * Within a band, weights are stored for 257 positions between two samples (0/256 to 256/256),
  * and the renderer blends the two nearest, which is as good as computing them exactly.
+ *
+ * <h2>Which samples a kernel reads</h2>
+ * A symmetric kernel reads as far before the output position as after it. The minimum-phase one
+ * ({@link MinimumPhase}) reads almost only samples before it: up to about one sample after (to
+ * cancel its delay) and the rest before. Each band stores the offset of its first tap from the
+ * whole sample at the output position.
  */
 final class KernelTable {
 
@@ -29,36 +38,59 @@ final class KernelTable {
     /** Bands 0-16: steps 1 to 4 (two octaves). */
     static final int BANDS = 2 * BANDS_PER_OCTAVE + 1;
 
-    /** For each band, the taps on each side of the output position. */
-    private final int[] halfTaps = new int[BANDS];
-    /** For each band, {@code PHASES + 1} rows of {@code 2 × halfTaps} weights, one after another. */
+    /** For each band: tap j reads the sample at (whole sample + firstTap + j). */
+    private final int[] firstTap = new int[BANDS];
+    private final int[] taps = new int[BANDS];
+    /** For each band, {@code PHASES + 1} rows of {@code taps} weights, one after another. */
     private final float[][] weights = new float[BANDS][];
 
-    KernelTable(Interpolator interpolator) {
+    /**
+     * @param weight      the kernel's height at a distance (stored sample minus output position,
+     *                    in samples, before stretching)
+     * @param from        the kernel is zero at distances up to this ...
+     * @param to          ... and from this on
+     */
+    private KernelTable(DoubleUnaryOperator weight, double from, double to) {
         for (int band = 0; band < BANDS; band++) {
             double step = stepOfBand(band);
-            int half = (int) Math.ceil(interpolator.radius * step - 1e-9);
-            int taps = 2 * half;
-            halfTaps[band] = half;
-            float[] table = new float[(PHASES + 1) * taps];
+            // Tap offsets o whose distance (o - fraction) lies inside (from, to) × step for some
+            // fraction in [0, 1). The small margins keep rounding from adding or losing a tap.
+            int first = (int) Math.floor(from * step + 1e-9) + 1;
+            int last = (int) Math.ceil(to * step + 1 - 1e-9) - 1;
+            int count = last - first + 1;
+            firstTap[band] = first;
+            taps[band] = count;
+            float[] table = new float[(PHASES + 1) * count];
             for (int phase = 0; phase <= PHASES; phase++) {
                 double fraction = phase / (double) PHASES;
-                double[] row = new double[taps];
+                double[] row = new double[count];
                 double total = 0;
-                for (int j = 0; j < taps; j++) {
-                    // Tap j sits at sample (floor + j - (half - 1)), so its distance from the
-                    // output position (floor + fraction) is this:
-                    double distance = (j - (half - 1)) - fraction;
-                    row[j] = interpolator.kernel(distance / step);
+                for (int j = 0; j < count; j++) {
+                    double distance = (first + j) - fraction;
+                    row[j] = weight.applyAsDouble(distance / step);
                     total += row[j];
                 }
                 // Make each row add up to exactly 1, so a constant signal comes out unchanged.
-                for (int j = 0; j < taps; j++) {
-                    table[phase * taps + j] = (float) (row[j] / total);
+                for (int j = 0; j < count; j++) {
+                    table[phase * count + j] = (float) (row[j] / total);
                 }
             }
             weights[band] = table;
         }
+    }
+
+    /** The table for a symmetric kernel (cubic, sinc). */
+    static KernelTable linearPhase(Interpolator interpolator) {
+        return new KernelTable(interpolator::kernel, -interpolator.radius, interpolator.radius);
+    }
+
+    /**
+     * The table for a minimum-phase kernel. Its response starts at time 0; reading it at
+     * (delay - distance) lines its low frequencies up with the output position.
+     */
+    static KernelTable minimumPhase(MinimumPhase kernel) {
+        double delay = kernel.delay();
+        return new KernelTable(distance -> kernel.at(delay - distance), delay - kernel.span(), delay);
     }
 
     /** The pitch step a band is built for: 2^(band / 8). */
@@ -75,9 +107,14 @@ final class KernelTable {
         return Math.min(BANDS - 1, (int) Math.ceil(exact - 1e-9));
     }
 
-    /** How many samples the band reads on each side of the output position. */
-    int halfTaps(int band) {
-        return halfTaps[band];
+    /** How many samples after the output position's whole sample the band reads, at most. */
+    int lookAhead(int band) {
+        return firstTap[band] + taps[band] - 1;
+    }
+
+    /** How many samples before the output position's whole sample the band reads, at most. */
+    int lookBehind(int band) {
+        return -firstTap[band];
     }
 
     /**
@@ -86,19 +123,22 @@ final class KernelTable {
      *
      * @param index    the whole sample at or before the output position
      * @param fraction 0-4095: how far past {@code index}, in 1/4096ths of a sample
+     * @param newest   the newest sample in the history; later ones aren't decoded yet, and the
+     *                 newest is read in their place (only at extremely low pitches, see
+     *                 {@link EnhancedRenderer})
      */
-    float interpolate(float[] history, int mask, long index, int fraction, int band) {
-        int half = halfTaps[band];
-        int taps = 2 * half;
+    float interpolate(float[] history, int mask, long index, int fraction, int band, long newest) {
+        int count = taps[band];
         float[] table = weights[band];
         // 4096 fractions over 256 phases: the top 8 bits pick a row, the low 4 blend it with the next.
-        int row = (fraction >> 4) * taps;
+        int row = (fraction >> 4) * count;
         float blend = (fraction & 15) / 16f;
-        long first = index - (half - 1);
+        long first = index + firstTap[band];
         float sum = 0;
-        for (int j = 0; j < taps; j++) {
-            float weight = table[row + j] + (table[row + taps + j] - table[row + j]) * blend;
-            sum += weight * history[(int) ((first + j) & mask)];
+        for (int j = 0; j < count; j++) {
+            float weight = table[row + j] + (table[row + count + j] - table[row + j]) * blend;
+            long sample = Math.min(first + j, newest);
+            sum += weight * history[(int) (sample & mask)];
         }
         return sum;
     }

@@ -15,7 +15,8 @@ import snesible.core.apu.SoundRenderer;
  *
  * <h2>What this does instead</h2>
  * <ul>
- *   <li><b>Interpolation:</b> cubic or 8-point sinc, which keep much more of a sample's treble
+ *   <li><b>Interpolation:</b> a 16-point sinc (also in a minimum-phase version, which doesn't
+ *       ring before sharp attacks) or cubic, which keep much more of a sample's treble
  *       ({@link Interpolator}).</li>
  *   <li><b>Anti-aliasing:</b> a voice playing faster than recorded uses a kernel stretched by its
  *       pitch step, which filters out what can't be reproduced ({@link KernelTable}).</li>
@@ -34,15 +35,21 @@ import snesible.core.apu.SoundRenderer;
  * hardware does. Noise voices play the DSP's noise value, whose sound comes from its 32 kHz rate.
  *
  * <h2>The delay</h2>
- * A stretched sinc kernel reads up to 16 samples after the output position, but the DSP has only
- * decoded about 6 beyond it. So the Quality output runs {@link #DELAY} DSP samples (125 µs) behind,
- * enough for the DSP to decode the rest. Each voice, and the echo and volumes here, keep a queue of
- * that many samples.
+ * The 16-point sinc reads 8 samples after the output position (up to 32 when stretched for
+ * anti-aliasing), but the DSP decodes only as it goes and is sometimes just 6 samples ahead. So
+ * the Quality output runs {@link #DELAY} DSP samples (3 ms) behind, and by then the DSP has
+ * decoded what's needed. Each voice, and the echo and volumes here, keep a queue of that length.
+ *
+ * <p>Why so long: a voice playing slowly decodes new samples slowly, and the delay has to cover
+ * the slowest voice. 96 DSP samples covers a pitch of $0100, a sixteenth of a sample's recorded
+ * speed. A voice slower still (rare) may need samples the DSP hasn't decoded yet; it reads its
+ * newest sample in their place, a tiny error at such pitches. 3 ms more is hard to notice next
+ * to the sound card's buffer (about 64 ms), and the Hardware preset isn't delayed.
  */
 public final class EnhancedRenderer implements SoundRenderer {
 
     /** How many DSP samples the Quality output runs behind. */
-    static final int DELAY = 4;
+    static final int DELAY = 96;
     private static final int QUEUE = DELAY + 1;
 
     /** Switching presets crossfades over this many samples (5 ms), so it doesn't click. */
@@ -59,8 +66,6 @@ public final class EnhancedRenderer implements SoundRenderer {
     private static final int FLG = 0x6C;
 
     private final EnhancedVoice[] voices = new EnhancedVoice[8];
-    private final KernelTable cubic = new KernelTable(Interpolator.CUBIC);
-    private final KernelTable sinc = new KernelTable(Interpolator.SINC);
 
     // The queue of global state, one entry per DSP sample (see "The delay").
     private final int[] mainVolumeLeft = new int[QUEUE];
@@ -184,13 +189,12 @@ public final class EnhancedRenderer implements SoundRenderer {
             return;
         }
         Interpolator interpolator = forcedInterpolator != null ? forcedInterpolator : preset.interpolator;
-        KernelTable table = interpolator == Interpolator.CUBIC ? cubic : sinc;
         boolean surroundFix = now.surroundFix();
         voiceMix[0] = 0;
         voiceMix[1] = 0;
         if (queueFull) {
             for (EnhancedVoice voice : voices) {
-                voice.mixInto(voiceMix, slot, interpolator, table, dsp, antiAliasing, surroundFix, useDeclick);
+                voice.mixInto(voiceMix, slot, interpolator, dsp, antiAliasing, surroundFix, useDeclick);
             }
         }
         // As the hardware: the voices at the main volume, plus the echo at the echo volume.

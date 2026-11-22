@@ -24,7 +24,8 @@ public final class Controls {
               Picture mode  F2 (sharp pixels, NTSC RF, composite, S-Video, RGB, monochrome)
               Scanlines     F3 (OpenGL window: CRT beams in any mode; Swing: NTSC modes only)
               Find gamepads F9 (Swing window; the OpenGL window finds them itself)
-              Sound         F10 (Hardware, Quality with sinc, Quality with cubic)
+              Sound         F10 (Hardware, Quality: sinc 8-point, sinc 16-point, sinc 16-point
+                            minimum phase, cubic)
               Fullscreen    F11 = borderless, instant; Alt+Enter = exclusive, lowest latency
                             (the screen blanks a few seconds while the monitor adjusts)
                             (OpenGL window; either key goes back to the window)

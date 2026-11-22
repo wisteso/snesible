@@ -105,8 +105,9 @@ public class Main {
                     --refresh <hz>                 refresh rate to ask for in exclusive
                                                    fullscreen (Alt+Enter)
                     --stats                        print timing and audio statistics each second
-                    --audio hardware|sinc|cubic    sound preset to start with (F10 cycles them;
-                                                   default hardware)
+                    --audio <preset>               sound preset to start with: hardware (default),
+                                                   sinc8, sinc16, minphase (16-point, minimum
+                                                   phase), cubic (F10 cycles them)
                     --stereo-width <percent>       0 = mono, 100 = as the game mixes (default),
                                                    up to 200 = twice as wide
                     --surround-fix                 undo games' inverted-phase "surround" (Quality

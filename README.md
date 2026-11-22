@@ -22,11 +22,12 @@ RGB or black-and-white connection) and F3 toggles scanlines (drawn like a CRT's 
 OpenGL window). `--video composite` (or `rf`, `svideo`, `rgb`, `monochrome`) and `--scanlines` pick
 them at startup.
 
-F10 cycles the sound: **Hardware** (exactly what the console's DSP outputs, the default) and two
+F10 cycles the sound: **Hardware** (exactly what the console's DSP outputs, the default) and the
 **Quality** presets that sound better than the console can, in the style of the SNESamp music
-player: 8-point sinc or cubic interpolation, anti-aliasing for samples played above their
-recorded pitch, floating-point mixing with a soft limiter, and de-click. `--audio sinc` (or
-`cubic`, `hardware`) picks one at startup. `--stereo-width <percent>` (0 = mono, up to 200) and
+player: 8- or 16-point sinc (the 16-point also in a minimum-phase version, which doesn't ring
+before sharp attacks) or cubic interpolation, anti-aliasing for samples played above their
+recorded pitch, floating-point mixing with a soft limiter, and de-click. `--audio sinc8` (or
+`sinc16`, `minphase`, `cubic`, `hardware`) picks one at startup. `--stereo-width <percent>` (0 = mono, up to 200) and
 `--surround-fix` (undoes games' inverted-phase "surround", which sounds hollow on headphones;
 Quality presets) adjust the stereo. The game runs exactly the same whichever is chosen.
 

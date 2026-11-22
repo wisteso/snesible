@@ -91,7 +91,7 @@ public final class EmulationSession {
     }
 
     /**
-     * Switches to the next sound preset (Hardware, Quality sinc, Quality cubic) and prints it.
+     * Switches to the next sound preset (Hardware, then the Quality presets) and prints it.
      * Safe to call from any thread: the change crossfades in on the emulation thread.
      */
     public void cycleAudioPreset() {
