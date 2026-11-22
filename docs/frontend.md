@@ -188,7 +188,7 @@ saved position and size. `toggleFullscreen(Fullscreen kind)` tracks the state in
   - F2: next `VideoMode`.
   - F3: scanlines (the beam shader, any picture mode).
   - F10: next sound preset (`EmulationSession.cycleAudioPreset`), as in the Swing window.
-  - F11: borderless fullscreen.
+  - F11: borderless fullscreen (on macOS: exclusive, as Alt+Enter; see section 8).
   - Alt+Enter: exclusive fullscreen.
   - Esc: quit.
   - F9: only prints that the window finds gamepads by itself.
@@ -448,9 +448,13 @@ with scanlines on and off, over frames 1-3 (all burst phases).
 - Only the build machine's LWJGL natives are bundled. A Maven profile picks Windows, Linux,
   macOS x64 or macOS arm64 at build time, so a jar built on Windows runs the OpenGL window
   only on Windows.
-- **macOS is untested.** GLFW needs the process's first thread there, so the OpenGL window (and
-  `--gamepad-test` without `--swing`) needs `java -XstartOnFirstThread -jar ...`. Without the
-  flag, `Main.requireFirstThreadOnMac` stops with an explanation. `GlRendererTest` is skipped
+- **macOS** (first tried 2026-11-22). GLFW needs the process's first thread there, so the OpenGL window (and
+  `--gamepad-test` without `--swing`) needs `java -XstartOnFirstThread -jar ...`. The launcher
+  doesn't pass that flag on to the JVM; it sets `JAVA_STARTED_ON_FIRST_THREAD_<pid>=1`, which
+  `Main.requireFirstThreadOnMac` checks, stopping with an explanation without it. Swing doesn't
+  start with the flag, so `--swing` runs without it. Tested by the user on a MacBook
+  (2026-11-22): the OpenGL window works. F11's borderless window ended up pushed up behind the
+  menu bar, so on macOS F11 is exclusive fullscreen, like Option+Return (quick there). `GlRendererTest` is skipped
   on macOS, since the test runner doesn't use the first thread. Linux is untested too.
 - `GlRendererTest` needs a real OpenGL 3.3 context (hidden window). It's skipped where none
   exists, such as a CI server, so a shader regression there would go unnoticed.

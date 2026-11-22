@@ -13,6 +13,7 @@ import snesible.ui.Frame;
 import snesible.ui.FrameClock;
 import snesible.ui.InputSource;
 import snesible.ui.PacingMode;
+import snesible.ui.Platform;
 import snesible.ui.PlayOptions;
 import snesible.ui.ToolScreen;
 import snesible.ui.VideoSink;
@@ -402,7 +403,11 @@ public final class LwjglWindow implements VideoSink {
                     return;
                 }
                 case GLFW_KEY_F11 -> {
-                    toggleFullscreen(Fullscreen.BORDERLESS);
+                    // Borderless fullscreen is a trick around a Windows display problem (see
+                    // toggleFullscreen). On macOS a window can't cover the menu bar that way (it
+                    // ends up pushed up behind it), and exclusive fullscreen switches quickly
+                    // there, so F11 does that instead, like Alt+Enter (Option+Return).
+                    toggleFullscreen(Platform.isMac() ? Fullscreen.EXCLUSIVE : Fullscreen.BORDERLESS);
                     return;
                 }
                 case GLFW_KEY_F12 -> {

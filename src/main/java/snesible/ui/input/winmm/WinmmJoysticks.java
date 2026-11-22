@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import snesible.ui.Platform;
 import snesible.ui.input.JoystickState;
 
 /**
@@ -84,7 +85,7 @@ public final class WinmmJoysticks {
 
     /** Loads winmm.dll, or returns empty when it isn't available (i.e. not on Windows). */
     public static Optional<WinmmJoysticks> open() {
-        if (!System.getProperty("os.name", "").startsWith("Windows")) {
+        if (!Platform.isWindows()) {
             return Optional.empty();
         }
         try {

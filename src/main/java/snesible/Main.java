@@ -18,6 +18,7 @@ import snesible.ui.Controls;
 import snesible.ui.InputSource;
 import snesible.ui.PacingMode;
 import snesible.ui.PlayOptions;
+import snesible.ui.Platform;
 import snesible.ui.ToolScreen;
 import snesible.ui.input.GamepadMapping;
 import snesible.ui.input.winmm.Gamepads;
@@ -201,16 +202,20 @@ public class Main {
      * it, stop with an explanation rather than fail inside GLFW. Other systems need nothing.
      */
     private static void requireFirstThreadOnMac() {
-        if (!System.getProperty("os.name", "").startsWith("Mac")) {
+        if (!Platform.isMac()) {
             return;
         }
-        boolean flagGiven = java.lang.management.ManagementFactory.getRuntimeMXBean()
-                .getInputArguments().contains("-XstartOnFirstThread");
+        // The java launcher handles -XstartOnFirstThread itself and doesn't pass it on to the JVM
+        // (so it isn't among the JVM's input arguments). It does leave a sign: an environment
+        // variable JAVA_STARTED_ON_FIRST_THREAD_<pid> = 1 for this process.
+        String variable = "JAVA_STARTED_ON_FIRST_THREAD_" + ProcessHandle.current().pid();
+        boolean flagGiven = "1".equals(System.getenv(variable));
         if (!flagGiven) {
             System.err.println("""
                     On macOS the OpenGL window needs Java's -XstartOnFirstThread option:
                       java -XstartOnFirstThread -jar target/snesible-0.1.0-SNAPSHOT.jar <rom-file>
-                    (or add --swing for the simpler Swing window, which doesn't need it).""");
+                    (or add --swing for the simpler Swing window, and leave the option out:
+                    Swing doesn't start with it).""");
             System.exit(1);
         }
     }

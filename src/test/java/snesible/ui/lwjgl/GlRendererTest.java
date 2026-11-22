@@ -9,6 +9,7 @@ import static org.lwjgl.system.MemoryUtil.NULL;
 
 import java.util.Random;
 import snesible.ui.Frame;
+import snesible.ui.Platform;
 import snesible.ui.video.SnesColor;
 import snesible.ui.video.VideoFilter;
 import snesible.ui.video.VideoMode;
@@ -32,7 +33,7 @@ class GlRendererTest {
 
     @BeforeAll
     static void createContext() {
-        Assumptions.assumeFalse(System.getProperty("os.name", "").startsWith("Mac"),
+        Assumptions.assumeFalse(Platform.isMac(),
                 "GLFW needs the first thread on macOS, which tests don't run on");
         LwjglWindow.useFfmMemoryAccess();
         boolean available = glfwInit();

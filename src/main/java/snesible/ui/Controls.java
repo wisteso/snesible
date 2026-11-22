@@ -28,7 +28,8 @@ public final class Controls {
                             minimum phase, cubic)
               Fullscreen    F11 = borderless, instant; Alt+Enter = exclusive, lowest latency
                             (the screen blanks a few seconds while the monitor adjusts)
-                            (OpenGL window; either key goes back to the window)
+                            (OpenGL window; either key goes back to the window;
+                            on macOS both keys are exclusive, Option+Return for Alt+Enter)
               Quit          Escape""";
 
     private Controls() {
