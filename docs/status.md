@@ -19,14 +19,14 @@ ICU64-style visual memory debugger (`m9-debugger-plan.md`).
 
 | # | Milestone | Commit | State |
 |---|-----------|--------|-------|
-| 1 | Maven skeleton, cartridge loading | `020fe43` | done |
-| 2 | 65816 core (5.12M SingleStepTests pass) | `3a5751c` | done |
-| 3 | Bus, timing, DMA, interrupts, CPU I/O, APU stub | `6b40bb6` | done |
-| 4 | PPU backgrounds and sprites, Swing window, keyboard | `4aaed5f` | done |
-| - | Scroll jitter fix, focus-independent keyboard | `c854205` | done |
-| 5 | Battery saves (.srm), gamepad via winmm/FFM | `4278371` | done |
-| 6 | HDMA, windows, color math, Mode 7, mosaic | `42fead7` | done |
-| 7 | SPC700 (256k tests pass), DSP, sound output | `aa19df1` | done; the user confirmed audio "seems great" |
+| 1 | Maven skeleton, cartridge loading | `3205d21` | done |
+| 2 | 65816 core (5.12M SingleStepTests pass) | `ea44c7c` | done |
+| 3 | Bus, timing, DMA, interrupts, CPU I/O, APU stub | `c8d206e` | done |
+| 4 | PPU backgrounds and sprites, Swing window, keyboard | `9e5dae2` | done |
+| - | Scroll jitter fix, focus-independent keyboard | `ad6ee01` | done |
+| 5 | Battery saves (.srm), gamepad via winmm/FFM | `5c947dd` | done |
+| 6 | HDMA, windows, color math, Mode 7, mosaic | `2bd8408` | done |
+| 7 | SPC700 (256k tests pass), DSP, sound output | `4b744d9` | done; the user confirmed audio "seems great" |
 | - | BG line numbering (+1) and render at dot 22 (the FastROM action game's HUD) | see git log | done |
 | 8 | Coprocessors: SuperFX (the GSU-1 and GSU-2 games) and SA-1 (the SA-1 game) | see git log | done; the user played all three ("pretty much perfectly") |
 | - | Offset-per-tile in modes 2 and 4 (the GSU-1 game's horizon); GSU background ROM/RAM buffers | see git log | done |
