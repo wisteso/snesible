@@ -79,8 +79,8 @@ J="$JAVA_HOME/bin/java"
 ```
 
 - `--debug-screenshot` runs the game with the memory debugger attached and saves what its
-  window would show for one memory (`--space` WRAM, ROM, Cart RAM, I-RAM, VRAM, CGRAM, OAM,
-  ARAM; `--size 1024x800`). It also prints the warmed-up drawing time.
+  window would show for one memory (`--space` ROM, WRAM, ARAM, VRAM, CGRAM, OAM, Cart RAM,
+  I-RAM; `--size 1024x800`). It also prints the warmed-up drawing time.
 - Read screenshot PNGs with the Read tool to check rendering. NTSC screenshots are 602 x 448;
   crop and enlarge a region (a tiny scratch Java program) to see the artifacts.
 - To capture the real window, `CopyFromScreen` returns a blank white client area (Java2D

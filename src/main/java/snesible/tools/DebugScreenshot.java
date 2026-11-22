@@ -19,7 +19,7 @@ import snesible.ui.debug.DebugScreen;
  * <pre>
  *   snesible --debug-screenshot game.sfc 600 out.png [--space VRAM] [--size 1024x800] [START@200 ...]
  * </pre>
- * {@code --space} picks the tab (WRAM, ROM, Cart RAM, I-RAM, VRAM, CGRAM, OAM, ARAM; default
+ * {@code --space} picks the tab (ROM, WRAM, ARAM, VRAM, CGRAM, OAM, Cart RAM, I-RAM; default
  * WRAM). Button presses work as in {@link Screenshot}.
  *
  * <p><b>Debug support:</b> a tool for the visual memory debugger.

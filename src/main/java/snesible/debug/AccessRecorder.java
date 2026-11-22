@@ -10,17 +10,18 @@ import snesible.core.system.WorkRam;
 /**
  * Every memory space of one console, plus the frame counter their access stamps refer to.
  *
- * <p>The spaces, in the order the UI lists them:
+ * <p>The spaces, in the order the UI lists them (the user's order: code first, then the
+ * console's memories, then the cartridge's optional RAM):
  * <ul>
- *   <li><b>WRAM</b>: the console's 128 KiB of work RAM (editable).</li>
  *   <li><b>ROM</b>: the cartridge ROM image.</li>
- *   <li><b>Cart RAM</b>: battery SRAM, SuperFX RAM or SA-1 BW-RAM, if the cartridge has any
- *       (editable).</li>
- *   <li><b>I-RAM</b>: the SA-1's 2 KiB on-chip RAM, on SA-1 cartridges (editable).</li>
+ *   <li><b>WRAM</b>: the console's 128 KiB of work RAM (editable).</li>
+ *   <li><b>ARAM</b>: the sound CPU's 64 KiB.</li>
  *   <li><b>VRAM</b>: 64 KiB of video RAM (32 K words, shown as bytes: low byte first).</li>
  *   <li><b>CGRAM</b>: the 256-colour palette, 512 bytes.</li>
  *   <li><b>OAM</b>: sprite attributes, 544 bytes.</li>
- *   <li><b>ARAM</b>: the sound CPU's 64 KiB.</li>
+ *   <li><b>Cart RAM</b>: battery SRAM, SuperFX RAM or SA-1 BW-RAM, if the cartridge has any
+ *       (editable).</li>
+ *   <li><b>I-RAM</b>: the SA-1's 2 KiB on-chip RAM, on SA-1 cartridges (editable).</li>
  * </ul>
  */
 public final class AccessRecorder {
@@ -44,10 +45,20 @@ public final class AccessRecorder {
     private int frame = 1;
 
     AccessRecorder(Snes snes) {
-        WorkRam workRam = snes.wram();
-        wram = add(new MemorySpace("WRAM", WorkRam.SIZE, workRam::read, true));
+        // The add(...) order is the tab order (see the class comment).
         byte[] romBytes = snes.cartridge().romBytes();
         rom = add(new MemorySpace("ROM", romBytes.length, i -> romBytes[i] & 0xFF, false));
+        WorkRam workRam = snes.wram();
+        wram = add(new MemorySpace("WRAM", WorkRam.SIZE, workRam::read, true));
+        byte[] aramBytes = snes.apu().ramBytes();
+        aram = add(new MemorySpace("ARAM", aramBytes.length, i -> aramBytes[i] & 0xFF, false));
+        var ppu = snes.ppu();
+        // VRAM is 32 K 16-bit words. As bytes, word w is bytes 2w (low) and 2w+1 (high), the
+        // order the CPU writes them through $2118/$2119.
+        vram = add(new MemorySpace("VRAM", 0x10000, i -> (ppu.peekVram(i >> 1) >> ((i & 1) * 8)) & 0xFF, false));
+        // CGRAM is 256 15-bit colours, low byte first, the order $2122 takes them.
+        cgram = add(new MemorySpace("CGRAM", 0x200, i -> (ppu.peekCgram(i >> 1) >> ((i & 1) * 8)) & 0xFF, false));
+        oam = add(new MemorySpace("OAM", 0x220, ppu::peekOam, false));
         byte[] ramBytes = snes.cartridge().ramBytes();
         cartRam = ramBytes.length == 0 ? null
                 : add(new MemorySpace("Cart RAM", ramBytes.length, i -> ramBytes[i] & 0xFF, true));
@@ -58,15 +69,6 @@ public final class AccessRecorder {
         } else {
             iram = null;
         }
-        var ppu = snes.ppu();
-        // VRAM is 32 K 16-bit words. As bytes, word w is bytes 2w (low) and 2w+1 (high), the
-        // order the CPU writes them through $2118/$2119.
-        vram = add(new MemorySpace("VRAM", 0x10000, i -> (ppu.peekVram(i >> 1) >> ((i & 1) * 8)) & 0xFF, false));
-        // CGRAM is 256 15-bit colours, low byte first, the order $2122 takes them.
-        cgram = add(new MemorySpace("CGRAM", 0x200, i -> (ppu.peekCgram(i >> 1) >> ((i & 1) * 8)) & 0xFF, false));
-        oam = add(new MemorySpace("OAM", 0x220, ppu::peekOam, false));
-        byte[] aramBytes = snes.apu().ramBytes();
-        aram = add(new MemorySpace("ARAM", aramBytes.length, i -> aramBytes[i] & 0xFF, false));
     }
 
     private MemorySpace add(MemorySpace space) {

@@ -324,6 +324,10 @@ Outside the core: `Main` becomes an instance class with `createSnes` (above), an
   `snesible.ui.video.SnesColor` happens where it's drawn, in `snesible.ui.debug`. Cross-highlight with the heat map (hover a tile → its VRAM
   bytes).
 - How much it should differ from ICU64's C64 graphics map is decided when 9c starts.
+- **Idea (the user's, 2026-11-21; decide when 9c starts):** hide the CGRAM and OAM heat-map
+  tabs once this viewer exists. They're small (512 and 544 bytes) and show little as heat
+  maps; the same data is far more useful decoded here, as palettes and sprites. Their access
+  recording would stay, for cross-highlighting.
 
 ### 9d. (Maybe) value scanner
 - Start a search over WRAM (and optionally cartridge RAM) for a value or "unknown", then
@@ -367,7 +371,9 @@ What differs from, or adds to, the plan above:
   of a power of two that make it roughly square, min 64; small tables 32), a status line with
   the hovered byte's value and the age of each kind of access, and a legend. Mouse wheel
   zooms around the cursor (down to fitting the whole memory, up to 96 px cells); left drag
-  pans; keys 1-9 pick a tab. The right button and `keyPressed` are free for 9b.
+  pans; keys 1-9 pick a tab. The right button and `keyPressed` are free for 9b. Tab order
+  (the user's, 2026-11-21): ROM, WRAM, ARAM, VRAM, CGRAM, OAM, Cart RAM, then I-RAM on SA-1
+  cartridges; the debugger opens on ROM.
 - **Frontend glue** (outside the core): `snesible.ui.ToolScreen` (toolkit-free contents of a second
   window), `ToolRedrawPacer`, `EmulationSession.setAfterFrame`, `Main.createToolScreen`,
   `GlfwToolWindow`, `SwingToolWindow`, and `--debug` in `Main` (hands over to `DebugMain` so
