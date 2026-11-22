@@ -61,6 +61,9 @@ public class Main {
         }
         if (args.length >= 1 && args[0].equals("--gamepad-test")) {
             boolean winmm = args.length == 2 && args[1].equals("--swing");
+            if (!winmm) {
+                requireFirstThreadOnMac(); // without --swing the test reads pads through GLFW
+            }
             GamepadTest.run(GamepadMapping.load(GAMEPAD_MAPPING_FILE), winmm);
             return;
         }
@@ -166,6 +169,7 @@ public class Main {
         GamepadMapping mapping = GamepadMapping.load(GAMEPAD_MAPPING_FILE);
 
         if (!swing) {
+            requireFirstThreadOnMac();
             LwjglWindow window = null;
             try {
                 window = LwjglWindow.open(title, playOptions);
@@ -188,6 +192,26 @@ public class Main {
         Runnable rescan = gamepads == null ? null : gamepads::requestRescan;
         Snes snes = createSnes(cart);
         SwingWindow.play(snes, title, saveFile, gamepadInputs, rescan, playOptions, createToolScreen(snes));
+    }
+
+    /**
+     * On macOS, GLFW (the OpenGL window's library) only works on the process's first thread, and
+     * Java only runs {@code main} there when started with {@code -XstartOnFirstThread}. Without
+     * it, stop with an explanation rather than fail inside GLFW. Other systems need nothing.
+     */
+    private static void requireFirstThreadOnMac() {
+        if (!System.getProperty("os.name", "").startsWith("Mac")) {
+            return;
+        }
+        boolean flagGiven = java.lang.management.ManagementFactory.getRuntimeMXBean()
+                .getInputArguments().contains("-XstartOnFirstThread");
+        if (!flagGiven) {
+            System.err.println("""
+                    On macOS the OpenGL window needs Java's -XstartOnFirstThread option:
+                      java -XstartOnFirstThread -jar target/snesible-0.1.0-SNAPSHOT.jar <rom-file>
+                    (or add --swing for the simpler Swing window, which doesn't need it).""");
+            System.exit(1);
+        }
     }
 
     /**

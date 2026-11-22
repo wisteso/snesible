@@ -448,8 +448,10 @@ with scanlines on and off, over frames 1-3 (all burst phases).
 - Only the build machine's LWJGL natives are bundled. A Maven profile picks Windows, Linux,
   macOS x64 or macOS arm64 at build time, so a jar built on Windows runs the OpenGL window
   only on Windows.
-- **macOS is untested and likely needs `-XstartOnFirstThread`** for GLFW. Nothing handles
-  that yet. Linux is untested too.
+- **macOS is untested.** GLFW needs the process's first thread there, so the OpenGL window (and
+  `--gamepad-test` without `--swing`) needs `java -XstartOnFirstThread -jar ...`. Without the
+  flag, `Main.requireFirstThreadOnMac` stops with an explanation. `GlRendererTest` is skipped
+  on macOS, since the test runner doesn't use the first thread. Linux is untested too.
 - `GlRendererTest` needs a real OpenGL 3.3 context (hidden window). It's skipped where none
   exists, such as a CI server, so a shader regression there would go unnoticed.
 

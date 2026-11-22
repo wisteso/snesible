@@ -21,17 +21,22 @@ import org.lwjgl.opengl.GL;
 /**
  * Draws frames through the real OpenGL pipeline in a hidden window and reads the pixels back:
  * the GPU must produce exactly what the Java code does. Skipped on machines without OpenGL 3.3
- * (a build server, say).
+ * (a build server, say), and on macOS: there GLFW only works on the process's first thread, which
+ * the test runner doesn't use (see {@code Main}'s check for {@code -XstartOnFirstThread}).
  */
 class GlRendererTest {
 
     private static long window = NULL;
     private static GlRenderer renderer;
+    private static boolean glfwStarted;
 
     @BeforeAll
     static void createContext() {
+        Assumptions.assumeFalse(System.getProperty("os.name", "").startsWith("Mac"),
+                "GLFW needs the first thread on macOS, which tests don't run on");
         LwjglWindow.useFfmMemoryAccess();
         boolean available = glfwInit();
+        glfwStarted = available;
         if (available) {
             glfwDefaultWindowHints();
             glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
@@ -55,7 +60,9 @@ class GlRendererTest {
         if (window != NULL) {
             glfwDestroyWindow(window);
         }
-        glfwTerminate();
+        if (glfwStarted) {
+            glfwTerminate();
+        }
     }
 
     @Test
